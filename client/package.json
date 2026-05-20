@@ -1,0 +1,18 @@
+{
+  "name": "@sprout-and-steel/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@sprout-and-steel/shared": "0.1.0",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "vite": "^7.2.4",
+    "typescript": "^5.9.3"
+  }
+}
