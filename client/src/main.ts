@@ -40,6 +40,13 @@ import {
   type ShootRequestPayload,
   type Vector2
 } from "@sprout-and-steel/shared";
+import { AudioManager } from "./audio/AudioManager";
+import {
+  audioEventIdFromActionRejected,
+  audioEventIdFromMatchResult,
+  audioEventIdsFromFeedback,
+  type AudioEventId
+} from "./audio/audioEvents";
 import "./styles.css";
 
 let battleScene: BattleScene | undefined;
@@ -56,6 +63,8 @@ let selectedPlantType: PlantType = "sunbloom";
 let evolutionPanelOpen = false;
 let clientRequestSequence = 0;
 let currentHoverCellLabel = "-";
+const audioManager = new AudioManager();
+audioManager.installUnlockListeners();
 
 const PLANT_HOTKEYS = {
   ONE: "sunbloom",
@@ -259,6 +268,8 @@ class BattleScene extends Phaser.Scene {
   }
 
   pushFeedback(event: FeedbackEvent): void {
+    playAudioEvents(audioEventIdsFromFeedback(event));
+
     const x = event.x ?? this.latestSnapshot?.players[0]?.x ?? MapConfigV01.worldWidthPx / 2;
     const y = event.y ?? this.latestSnapshot?.players[0]?.y ?? MapConfigV01.worldHeightPx / 2;
     const label = feedbackLabel(event);
@@ -846,6 +857,12 @@ const matchState: MatchClientState = {
 
 const lobby = createLobbyUi();
 
+document.addEventListener("click", (event) => {
+  if (event.target instanceof HTMLElement && event.target.closest("button")) {
+    playAudioEvent("ui.click");
+  }
+});
+
 socket.on("connect", () => {
   lobby.status.textContent = `Connected ${socket.id ?? ""}`;
   lobby.error.textContent = "";
@@ -902,12 +919,14 @@ socket.on(S2C.STATE_SNAPSHOT, (payload: GameStateSnapshot) => {
 socket.on(S2C.MATCH_ENDED, (payload: MatchEndedPayload) => {
   matchState.matchEnded = payload;
   matchState.latestSnapshot = payload.finalSnapshot;
+  playAudioEvent(audioEventIdFromMatchResult(payload.result));
   battleScene?.pushSnapshot(payload.finalSnapshot);
   showMatchResult(payload);
   renderMatchDebug();
 });
 
 socket.on(S2C.ROOM_ERROR, (payload: RoomErrorPayload) => {
+  playAudioEvent("ui.error");
   lobby.error.textContent = `${payload.reason}: ${payload.message}`;
 });
 
@@ -932,6 +951,7 @@ socket.on(S2C.ACTION_ACCEPTED, (payload: ActionAcceptedPayload) => {
 });
 
 socket.on(S2C.ACTION_REJECTED, (payload: ActionRejectedPayload) => {
+  playAudioEvent(audioEventIdFromActionRejected());
   showActionToast(`${payload.reason}: ${payload.message}`);
 });
 
@@ -1137,6 +1157,7 @@ sendDebugCommand = (payload: DebugCommandPayload) => {
 
   socket.emit(C2S.DEBUG_COMMAND, payload, (result: { ok: boolean; reason?: string }) => {
     if (!result.ok) {
+      playAudioEvent("ui.error");
       showActionToast(`Debug rejected: ${result.reason ?? "UNKNOWN"}`);
       return;
     }
@@ -1383,6 +1404,20 @@ function showMatchResult(payload: MatchEndedPayload): void {
       return card;
     })
   );
+}
+
+function playAudioEvent(id: AudioEventId | undefined): void {
+  if (!id) {
+    return;
+  }
+
+  audioManager.play(id);
+}
+
+function playAudioEvents(ids: AudioEventId[]): void {
+  for (const id of ids) {
+    playAudioEvent(id);
+  }
 }
 
 function resultStat(label: string, value: string): HTMLDivElement {

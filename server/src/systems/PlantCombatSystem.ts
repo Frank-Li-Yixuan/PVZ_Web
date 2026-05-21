@@ -1,4 +1,10 @@
-import { CombatNumbersV01, type FeedbackEvent, type PlantState } from "@sprout-and-steel/shared";
+import {
+  CombatNumbersV01,
+  createEntityId,
+  getPlantCellCenter,
+  type FeedbackEvent,
+  type PlantState
+} from "@sprout-and-steel/shared";
 import type { EnemySystem } from "./EnemySystem";
 import type { PlantSystem } from "./PlantSystem";
 import type { ProjectileSystem } from "./ProjectileSystem";
@@ -8,6 +14,7 @@ const FIRE_EPSILON_SECONDS = 0.000_001;
 
 export class PlantCombatSystem {
   private readonly cooldownByPlantId = new Map<string, number>();
+  private eventSequence = 0;
 
   update(
     deltaSeconds: number,
@@ -47,7 +54,25 @@ export class PlantCombatSystem {
         continue;
       }
 
-      projectiles.spawnPeaProjectile(plant, serverTimeMs);
+      const projectile = projectiles.spawnPeaProjectile(plant, serverTimeMs);
+      const center = getPlantCellCenter({
+        laneIndex: plant.laneIndex as 0 | 1 | 2 | 3 | 4,
+        columnIndex: plant.columnIndex as 0 | 1 | 2 | 3 | 4 | 5 | 6
+      });
+      events.push({
+        id: createEntityId("event", ++this.eventSequence),
+        eventType: "plant.shoot",
+        serverTimeMs,
+        entityId: plant.id,
+        x: center.x,
+        y: center.y,
+        data: {
+          plantType: plant.type,
+          projectileId: projectile.id,
+          laneIndex: plant.laneIndex,
+          columnIndex: plant.columnIndex
+        }
+      });
       this.cooldownByPlantId.set(plant.id, CombatNumbersV01.plants.peashotter.attackIntervalSeconds);
     }
 
