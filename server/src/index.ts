@@ -37,7 +37,7 @@ const httpServer = http.createServer((request, response) => {
     ok: true,
     service: "sprout-and-steel-server",
     version: PROJECT_VERSION,
-    phase: "phase-0"
+    phase: "phase-10"
   };
 
   if (request.url === "/" || request.url === "/health") {
@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
   console.log(`[server] socket connected: ${socket.id}`);
   socket.emit("server.ready", {
     version: PROJECT_VERSION,
-    message: "Phase 9 hero evolution server is ready."
+    message: "Phase 10 boss fight server is ready."
   });
 
   socket.on(C2S.ROOM_CREATE, (request: CreateRoomRequest, ack?: (payload: RoomAckPayload) => void) => {
@@ -338,7 +338,7 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 9 listening on http://${HOST}:${PORT}`);
+  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 10 listening on http://${HOST}:${PORT}`);
 });
 
 function broadcastRoomState(room: GameRoom): void {

@@ -156,6 +156,7 @@ button:disabled {
 .match-status,
 .plant-hud,
 .weapon-hud,
+.boss-hud,
 .evolution-hud,
 .debug-overlay {
   margin-top: 14px;
@@ -166,6 +167,7 @@ button:disabled {
 .match-status h3,
 .plant-hud h3,
 .weapon-hud h3,
+.boss-hud h3,
 .evolution-hud h3,
 .debug-overlay h3 {
   margin: 0 0 10px;
@@ -222,7 +224,7 @@ button:disabled {
 
 .debug-actions .button-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin-top: 0;
 }

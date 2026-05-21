@@ -22,6 +22,7 @@ import {
   type ShootRequestPayload
 } from "@sprout-and-steel/shared";
 import { MatchStateMachine } from "./MatchStateMachine";
+import { BossSystem } from "../systems/BossSystem";
 import { EconomySystem } from "../systems/EconomySystem";
 import { EnemySystem } from "../systems/EnemySystem";
 import { EvolutionSystem, type EvolutionActionResult } from "../systems/EvolutionSystem";
@@ -78,6 +79,7 @@ export class GameLoop {
   private readonly projectileSystem = new ProjectileSystem();
   private readonly plantCombatSystem = new PlantCombatSystem();
   private readonly waveSystem = new WaveSystem();
+  private readonly bossSystem = new BossSystem();
   private readonly weaponSystem = new WeaponSystem();
   private readonly evolutionSystem = new EvolutionSystem();
   private readonly pendingSnapshotEvents: FeedbackEvent[] = [];
@@ -236,6 +238,14 @@ export class GameLoop {
       return { ok: true };
     }
 
+    if (payload.command === "startBoss") {
+      const result = this.startBossFight(this.now());
+      if (!result.ok) {
+        return result;
+      }
+      return { ok: true };
+    }
+
     return {
       ok: false,
       reason: "UNKNOWN_DEBUG_COMMAND"
@@ -263,10 +273,12 @@ export class GameLoop {
 
     if (canMutateCombat(matchState) && !enteredWavePrepFromCountdown) {
       this.updateWaves(serverTimeMs);
+      this.updateBossPrep(serverTimeMs);
       matchState = this.stateMachine.getMatchState();
     }
 
     if (canMutateCombat(matchState)) {
+      this.economySystem.update(this.tickDeltaSeconds);
       this.pendingSnapshotEvents.push(
         ...this.weaponSystem.update(this.tickDeltaSeconds, this.playersById.values(), serverTimeMs),
         ...this.plantSystem.update(this.tickDeltaSeconds, this.economySystem, serverTimeMs),
@@ -275,14 +287,16 @@ export class GameLoop {
           this.plantSystem,
           this.enemySystem,
           this.projectileSystem,
-          serverTimeMs
+          serverTimeMs,
+          this.bossSystem
         ),
         ...this.projectileSystem.update(
           this.tickDeltaSeconds,
           this.enemySystem,
           this.economySystem,
           serverTimeMs,
-          this.playersById
+          this.playersById,
+          this.bossSystem
         )
       );
 
@@ -294,17 +308,39 @@ export class GameLoop {
         serverTimeMs
       );
       this.pendingSnapshotEvents.push(...enemyResult.events);
-      if (enemyResult.defeated && this.stateMachine.getMatchState() !== "DEFEAT") {
-        const defeatEvent = this.stateMachine.forceTerminalState("DEFEAT", serverTimeMs);
-        this.options.onPhaseChanged(defeatEvent);
-        this.pendingSnapshotEvents.push({
-          id: `event_defeat_${this.serverSeq + 1}`,
-          eventType: "match.defeat",
-          serverTimeMs,
-          data: {
-            reason: "base_destroyed"
-          }
+
+      if (this.stateMachine.getMatchState() === "BOSS_ACTIVE") {
+        const bossResult = this.bossSystem.update({
+          matchState: this.stateMachine.getMatchState(),
+          deltaSeconds: this.tickDeltaSeconds,
+          plants: this.plantSystem,
+          enemies: this.enemySystem,
+          economy: this.economySystem,
+          base: this.base,
+          players: this.playersById.values(),
+          serverTimeMs
         });
+        this.pendingSnapshotEvents.push(...bossResult.events);
+
+        for (const spawn of bossResult.spawns) {
+          const spawnResult = this.enemySystem.spawnEnemy({
+            enemyType: spawn.enemyType,
+            laneIndex: spawn.laneIndex,
+            serverTimeMs,
+            debugSpawn: false
+          });
+          if (spawnResult.ok) {
+            this.pendingSnapshotEvents.push(spawnResult.feedback);
+          }
+        }
+      }
+
+      if ((enemyResult.defeated || this.base.hp <= 0) && this.stateMachine.getMatchState() !== "DEFEAT") {
+        this.discardVictoryFeedback();
+        this.forceDefeat(serverTimeMs);
+      } else if (this.bossSystem.isDefeated() && this.stateMachine.getMatchState() !== "VICTORY") {
+        const victoryEvent = this.stateMachine.forceTerminalState("VICTORY", serverTimeMs);
+        this.options.onPhaseChanged(victoryEvent);
       }
     }
 
@@ -338,6 +374,11 @@ export class GameLoop {
       wave: this.waveSystem.getSnapshot(enemies.length),
       events: this.pendingSnapshotEvents.splice(0)
     };
+
+    const boss = this.bossSystem.getSnapshot(this.stateMachine.getMatchState());
+    if (boss) {
+      snapshot.boss = boss;
+    }
 
     return snapshot;
   }
@@ -373,6 +414,59 @@ export class GameLoop {
       });
       if (spawnResult.ok) {
         this.pendingSnapshotEvents.push(spawnResult.feedback);
+      }
+    }
+  }
+
+  private updateBossPrep(serverTimeMs: number): void {
+    if (this.stateMachine.getMatchState() !== "BOSS_PREP") {
+      return;
+    }
+
+    const elapsedSeconds = this.stateMachine.getTime().stateElapsedSeconds;
+    if (elapsedSeconds + 0.000_001 < CombatNumbersV01.match.bossPrepSeconds) {
+      return;
+    }
+
+    this.startBossFight(serverTimeMs);
+  }
+
+  private startBossFight(serverTimeMs: number): DebugCommandResult {
+    if (this.stateMachine.getMatchState() === "BOSS_ACTIVE") {
+      return { ok: false, reason: "BOSS_ALREADY_ACTIVE" };
+    }
+
+    const spawn = this.bossSystem.spawnBoss(serverTimeMs);
+    if (!spawn.ok) {
+      return {
+        ok: false,
+        reason: spawn.reason
+      };
+    }
+
+    const event = this.stateMachine.transitionTo("BOSS_ACTIVE", serverTimeMs);
+    this.options.onPhaseChanged(event);
+    this.pendingSnapshotEvents.push(spawn.feedback);
+    return { ok: true };
+  }
+
+  private forceDefeat(serverTimeMs: number): void {
+    const defeatEvent = this.stateMachine.forceTerminalState("DEFEAT", serverTimeMs);
+    this.options.onPhaseChanged(defeatEvent);
+    this.pendingSnapshotEvents.push({
+      id: `event_defeat_${this.serverSeq + 1}`,
+      eventType: "match.defeat",
+      serverTimeMs,
+      data: {
+        reason: "base_destroyed"
+      }
+    });
+  }
+
+  private discardVictoryFeedback(): void {
+    for (let index = this.pendingSnapshotEvents.length - 1; index >= 0; index -= 1) {
+      if (this.pendingSnapshotEvents[index]?.eventType === "match.victory") {
+        this.pendingSnapshotEvents.splice(index, 1);
       }
     }
   }

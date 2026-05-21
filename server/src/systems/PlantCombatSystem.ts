@@ -2,6 +2,7 @@ import { CombatNumbersV01, type FeedbackEvent, type PlantState } from "@sprout-a
 import type { EnemySystem } from "./EnemySystem";
 import type { PlantSystem } from "./PlantSystem";
 import type { ProjectileSystem } from "./ProjectileSystem";
+import type { BossSystem } from "./BossSystem";
 
 const FIRE_EPSILON_SECONDS = 0.000_001;
 
@@ -13,7 +14,8 @@ export class PlantCombatSystem {
     plants: PlantSystem,
     enemies: EnemySystem,
     projectiles: ProjectileSystem,
-    serverTimeMs: number
+    serverTimeMs: number,
+    boss?: BossSystem
   ): FeedbackEvent[] {
     if (deltaSeconds <= 0) {
       return [];
@@ -41,7 +43,7 @@ export class PlantCombatSystem {
         continue;
       }
 
-      if (!enemies.findPeashotterTarget(plant)) {
+      if (!enemies.findPeashotterTarget(plant) && !boss?.canPeashotterTarget(plant)) {
         continue;
       }
 

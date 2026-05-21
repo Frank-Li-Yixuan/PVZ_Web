@@ -11,7 +11,7 @@ export type HealthCheckPayload = {
   ok: true;
   service: string;
   version: string;
-  phase: "phase-0";
+  phase: string;
 };
 
 export * from "../types/enums";

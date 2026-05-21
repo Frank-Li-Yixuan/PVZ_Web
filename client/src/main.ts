@@ -14,6 +14,7 @@ import {
   getPlantCellCenter,
   type ActionAcceptedPayload,
   type ActionRejectedPayload,
+  type BossState,
   type BulletState,
   type DebugCommandPayload,
   type EnemyState,
@@ -110,7 +111,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 306, `Phase 9 hero evolution build ${PROJECT_VERSION}`, {
+      .text(width / 2, 306, `Phase 10 boss fight build ${PROJECT_VERSION}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: "#f3c84b"
@@ -159,12 +160,18 @@ type BulletView = {
   graphics: Phaser.GameObjects.Graphics;
 };
 
+type BossView = {
+  graphics: Phaser.GameObjects.Graphics;
+  label: Phaser.GameObjects.Text;
+};
+
 class BattleScene extends Phaser.Scene {
   private movementKeys: MovementKeys | undefined;
   private readonly playerViews = new Map<string, PlayerView>();
   private readonly plantViews = new Map<string, PlantView>();
   private readonly enemyViews = new Map<string, EnemyView>();
   private readonly bulletViews = new Map<string, BulletView>();
+  private bossView: BossView | undefined;
   private readonly snapshotBuffer: SnapshotBufferEntry[] = [];
   private readonly localPredictedPositions = new Map<string, Vector2>();
   private hoverGraphics: Phaser.GameObjects.Graphics | undefined;
@@ -438,6 +445,7 @@ class BattleScene extends Phaser.Scene {
     this.renderPlants(snapshot.plants);
     this.renderEnemies(snapshot.enemies);
     this.renderBullets(snapshot.bullets);
+    this.renderBoss(snapshot.boss);
     this.renderBase(snapshot);
     this.renderHoverHighlight(snapshot);
   }
@@ -683,6 +691,42 @@ class BattleScene extends Phaser.Scene {
     }
   }
 
+  private renderBoss(boss: BossState | undefined): void {
+    if (!boss) {
+      if (this.bossView) {
+        this.bossView.graphics.destroy();
+        this.bossView.label.destroy();
+        this.bossView = undefined;
+      }
+      return;
+    }
+
+    const view = this.getBossView(boss);
+    drawBossPlaceholder(view.graphics, boss);
+    view.label.setText(bossLabel(boss));
+    view.label.setPosition(boss.x, boss.y + 72);
+  }
+
+  private getBossView(boss: BossState): BossView {
+    if (this.bossView) {
+      return this.bossView;
+    }
+
+    this.bossView = {
+      graphics: this.add.graphics().setDepth(17),
+      label: this.add
+        .text(boss.x, boss.y + 72, bossLabel(boss), {
+          fontFamily: "Arial, sans-serif",
+          fontSize: "12px",
+          color: "#ffd7b8",
+          backgroundColor: "#101513"
+        })
+        .setOrigin(0.5)
+        .setDepth(19)
+    };
+    return this.bossView;
+  }
+
   private getBulletView(bullet: BulletState): BulletView {
     const existing = this.bulletViews.get(bullet.id);
     if (existing) {
@@ -905,6 +949,28 @@ socket.on(S2C.FEEDBACK_EVENT, (payload: FeedbackEvent) => {
   if (payload.eventType === "hero.evolved") {
     const path = typeof payload.data?.path === "string" ? payload.data.path : "Hero";
     showActionToast(`${path} evolved.`);
+    return;
+  }
+  if (payload.eventType === "boss.spawned") {
+    showActionToast("Ironmaw arrived.");
+    return;
+  }
+  if (payload.eventType === "boss.phaseChanged") {
+    const phase = typeof payload.data?.phase === "number" ? `Phase ${payload.data.phase}` : "Boss";
+    const skill = typeof payload.data?.skill === "string" ? ` ${payload.data.skill}` : "";
+    showActionToast(`${phase}${skill}`);
+    return;
+  }
+  if (payload.eventType === "boss.chargeStarted") {
+    showActionToast("Boss charge warning.");
+    return;
+  }
+  if (payload.eventType === "boss.interrupted") {
+    showActionToast("Boss interrupted.");
+    return;
+  }
+  if (payload.eventType === "match.victory") {
+    showActionToast("Victory.");
   }
 });
 
@@ -973,6 +1039,7 @@ lobby.leaveButton.addEventListener("click", () => {
 lobby.spawnShamblerButton.addEventListener("click", () => sendSpawnEnemyDebug("shambler"));
 lobby.spawnRunnerButton.addEventListener("click", () => sendSpawnEnemyDebug("runner"));
 lobby.spawnBruteButton.addEventListener("click", () => sendSpawnEnemyDebug("brute"));
+lobby.startBossButton.addEventListener("click", () => sendDebugCommand({ command: "startBoss" }));
 lobby.evolveFirepowerButton.addEventListener("click", () => sendEvolutionPath("firepower"));
 lobby.evolveControlButton.addEventListener("click", () => sendEvolutionPath("control"));
 lobby.evolveSupportButton.addEventListener("click", () => sendEvolutionPath("support"));
@@ -1058,6 +1125,10 @@ sendDebugCommand = (payload: DebugCommandPayload) => {
     }
     if (payload.command === "spawnEnemy") {
       showActionToast(`Spawned ${payload.enemyType}.`);
+      return;
+    }
+    if (payload.command === "startBoss") {
+      showActionToast("Boss started.");
     }
   });
 };
@@ -1189,7 +1260,9 @@ function renderMatchDebug(): void {
   lobby.debugPosition.textContent = localPlayer ? `${localPlayer.x.toFixed(1)}, ${localPlayer.y.toFixed(1)}` : "-";
   lobby.debugAim.textContent = localPlayer ? `${localPlayer.aimX.toFixed(2)}, ${localPlayer.aimY.toFixed(2)}` : "-";
   lobby.debugEntities.textContent = snapshot
-    ? `P:${snapshot.players.length} Pl:${snapshot.plants.length} E:${snapshot.enemies.length} B:${snapshot.bullets.length}`
+    ? `P:${snapshot.players.length} Pl:${snapshot.plants.length} E:${snapshot.enemies.length} B:${snapshot.bullets.length} Boss:${
+        snapshot.boss ? 1 : 0
+      }`
     : "-";
   lobby.sharedSun.textContent = snapshot ? String(snapshot.economy.sharedSun) : "-";
   lobby.ammoMagazine.textContent = localPlayer
@@ -1203,6 +1276,12 @@ function renderMatchDebug(): void {
     localPlayer && localPlayer.ammoPurchaseCooldownRemainingSeconds > 0
       ? `${localPlayer.ammoPurchaseCooldownRemainingSeconds.toFixed(1)}s`
       : "Ready";
+  lobby.bossHp.textContent = snapshot?.boss ? `${snapshot.boss.hp}/${snapshot.boss.maxHp}` : "-";
+  lobby.bossPhase.textContent = snapshot?.boss ? `Phase ${snapshot.boss.phase}` : "-";
+  lobby.bossSkill.textContent = snapshot?.boss?.currentSkill ?? "-";
+  lobby.bossInterrupt.textContent = snapshot?.boss
+    ? `${snapshot.boss.interruptProgress}/${snapshot.boss.interruptRequired}`
+    : "-";
   lobby.selectedPlant.textContent = PLANT_LABELS[selectedPlantType];
   lobby.hoverCell.textContent = currentHoverCellLabel;
 }
@@ -1253,6 +1332,53 @@ function showActionToast(message: string): void {
 function enemyLabel(enemy: EnemyState): string {
   const prefix = enemy.type === "shambler" ? "S" : enemy.type === "runner" ? "R" : "B";
   return `${prefix} ${enemy.hp}/${enemy.maxHp}${enemy.slowed ? " slow" : ""}`;
+}
+
+function bossLabel(boss: BossState): string {
+  const skill = boss.currentSkill ? ` ${boss.currentSkill}` : "";
+  return `Ironmaw P${boss.phase} ${boss.hp}/${boss.maxHp}${skill}`;
+}
+
+function drawBossPlaceholder(graphics: Phaser.GameObjects.Graphics, boss: BossState): void {
+  graphics.clear();
+  const bodyColor = boss.phase === 2 ? 0xb94f45 : 0x7a5363;
+  const outlineColor = boss.currentSkill === "charge_windup" ? 0xffd56b : 0x25131b;
+
+  graphics.fillStyle(0x08100c, 0.32);
+  graphics.fillEllipse(boss.x, boss.y + 48, 156, 24);
+
+  if (boss.currentSkill === "charge_windup") {
+    graphics.lineStyle(4, 0xffd56b, 0.62);
+    graphics.lineBetween(
+      boss.x - CombatNumbersV01.boss.ironmaw.charge.failedChargeDistance,
+      boss.y,
+      boss.x + CombatNumbersV01.boss.ironmaw.collisionRadius,
+      boss.y
+    );
+    graphics.strokeCircle(boss.x, boss.y, CombatNumbersV01.boss.ironmaw.collisionRadius + 10);
+  }
+
+  graphics.fillStyle(bodyColor, 1);
+  graphics.fillRoundedRect(boss.x - 62, boss.y - 44, 124, 92, 8);
+  graphics.fillStyle(0x49364a, 1);
+  graphics.fillRoundedRect(boss.x - 46, boss.y - 68, 92, 34, 7);
+  graphics.fillStyle(0xf4d2a6, 1);
+  graphics.fillCircle(boss.x - 24, boss.y - 50, 6);
+  graphics.fillCircle(boss.x + 24, boss.y - 50, 6);
+  graphics.lineStyle(4, outlineColor, 0.95);
+  graphics.strokeRoundedRect(boss.x - 62, boss.y - 44, 124, 92, 8);
+
+  if (boss.weakPointActive && boss.weakPointX !== undefined && boss.weakPointY !== undefined) {
+    graphics.fillStyle(0xffef93, 0.96);
+    graphics.fillCircle(boss.weakPointX, boss.weakPointY, 13);
+    graphics.lineStyle(3, 0xff7f6e, 0.95);
+    graphics.strokeCircle(boss.weakPointX, boss.weakPointY, 19);
+  }
+
+  drawHpBar(graphics, boss.x, boss.y - 88, 148, boss.hp, boss.maxHp, boss.phase === 2 ? 0xff8f7e : 0xd7a96b);
+  if (boss.interruptRequired > 0 && (boss.charging || boss.interruptProgress > 0)) {
+    drawHpBar(graphics, boss.x, boss.y - 78, 116, boss.interruptProgress, boss.interruptRequired, 0x8fc4ff);
+  }
 }
 
 function drawEnemyPlaceholder(graphics: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
@@ -1357,6 +1483,9 @@ function phaseBannerLabel(event: MatchPhaseChangedEvent): string | undefined {
   if (event.nextState === "BOSS_PREP") {
     return "Boss Prep";
   }
+  if (event.nextState === "BOSS_ACTIVE") {
+    return "Boss Fight";
+  }
   if (event.nextState === "DEFEAT") {
     return "Defeat";
   }
@@ -1400,6 +1529,29 @@ function feedbackLabel(event: FeedbackEvent): { text: string; color: string; siz
   }
   if (event.eventType === "base.damaged") {
     return { text: "BASE HIT", color: "#ff8f7e", size: "16px", durationMs: 680 };
+  }
+  if (event.eventType === "boss.spawned") {
+    return { text: "IRONMAW", color: "#ffd7b8", size: "20px", durationMs: 900 };
+  }
+  if (event.eventType === "boss.phaseChanged") {
+    const phase = typeof event.data?.phase === "number" ? `P${event.data.phase}` : "Boss";
+    const skill = typeof event.data?.skill === "string" ? ` ${event.data.skill}` : "";
+    return { text: `${phase}${skill}`, color: "#f3c84b", size: "16px", durationMs: 760 };
+  }
+  if (event.eventType === "boss.weakPointExposed") {
+    return { text: "weak point", color: "#ffef93", size: "14px", durationMs: 620 };
+  }
+  if (event.eventType === "boss.chargeStarted") {
+    return { text: "CHARGE", color: "#ff8f7e", size: "18px", durationMs: 760 };
+  }
+  if (event.eventType === "boss.interrupted") {
+    return { text: "INTERRUPT", color: "#8fc4ff", size: "18px", durationMs: 760 };
+  }
+  if (event.eventType === "boss.chargeFailed") {
+    return { text: "dash", color: "#ffb3a5", size: "14px", durationMs: 620 };
+  }
+  if (event.eventType === "match.victory") {
+    return { text: "VICTORY", color: "#f3c84b", size: "24px", durationMs: 1200 };
   }
   if (event.eventType === "match.defeat") {
     return { text: "DEFEAT", color: "#ff8f7e", size: "24px", durationMs: 1200 };
@@ -1459,10 +1611,15 @@ function createLobbyUi(): {
   ammoReserve: HTMLSpanElement;
   reloadState: HTMLSpanElement;
   ammoCooldown: HTMLSpanElement;
+  bossHp: HTMLSpanElement;
+  bossPhase: HTMLSpanElement;
+  bossSkill: HTMLSpanElement;
+  bossInterrupt: HTMLSpanElement;
   debugLaneInput: HTMLInputElement;
   spawnShamblerButton: HTMLButtonElement;
   spawnRunnerButton: HTMLButtonElement;
   spawnBruteButton: HTMLButtonElement;
+  startBossButton: HTMLButtonElement;
   actionToast: HTMLDivElement;
 } {
   const app = document.querySelector<HTMLDivElement>("#app");
@@ -1529,6 +1686,15 @@ function createLobbyUi(): {
         <div><dt>Buy CD</dt><dd data-testid="ammo-cooldown">-</dd></div>
       </dl>
     </section>
+    <section class="boss-hud" aria-label="Boss">
+      <h3>Boss</h3>
+      <dl class="room-meta">
+        <div><dt>HP</dt><dd data-testid="boss-hp">-</dd></div>
+        <div><dt>Phase</dt><dd data-testid="boss-phase">-</dd></div>
+        <div><dt>Skill</dt><dd data-testid="boss-skill">-</dd></div>
+        <div><dt>Interrupt</dt><dd data-testid="boss-interrupt">-</dd></div>
+      </dl>
+    </section>
     <section class="evolution-hud" data-testid="evolution-panel" aria-label="Evolution paths" hidden>
       <h3>Evolution</h3>
       <dl class="room-meta">
@@ -1564,6 +1730,7 @@ function createLobbyUi(): {
           <button type="button" data-testid="spawn-shambler">Shambler</button>
           <button type="button" data-testid="spawn-runner">Runner</button>
           <button type="button" data-testid="spawn-brute">Brute</button>
+          <button type="button" data-testid="start-boss">Start Boss</button>
         </div>
       </div>
     </section>
@@ -1615,10 +1782,15 @@ function createLobbyUi(): {
     ammoReserve: requiredElement(panel, "[data-testid='ammo-reserve']"),
     reloadState: requiredElement(panel, "[data-testid='reload-state']"),
     ammoCooldown: requiredElement(panel, "[data-testid='ammo-cooldown']"),
+    bossHp: requiredElement(panel, "[data-testid='boss-hp']"),
+    bossPhase: requiredElement(panel, "[data-testid='boss-phase']"),
+    bossSkill: requiredElement(panel, "[data-testid='boss-skill']"),
+    bossInterrupt: requiredElement(panel, "[data-testid='boss-interrupt']"),
     debugLaneInput: requiredElement(panel, "[data-testid='debug-lane']"),
     spawnShamblerButton: requiredElement(panel, "[data-testid='spawn-shambler']"),
     spawnRunnerButton: requiredElement(panel, "[data-testid='spawn-runner']"),
     spawnBruteButton: requiredElement(panel, "[data-testid='spawn-brute']"),
+    startBossButton: requiredElement(panel, "[data-testid='start-boss']"),
     actionToast: requiredElement(panel, "[data-testid='action-toast']")
   };
 }

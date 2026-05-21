@@ -118,6 +118,7 @@ export type EvolveRequestPayload = {
 export type DebugCommandPayload =
   | { command: "addSun"; amount: number }
   | { command: "spawnEnemy"; enemyType: EnemyType; laneIndex: number }
+  | { command: "startBoss" }
   | { command: "killAllEnemies" };
 
 export type ReconnectRequest = {

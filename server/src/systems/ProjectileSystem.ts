@@ -12,6 +12,7 @@ import {
 import type { EconomySystem } from "./EconomySystem";
 import type { EnemySystem } from "./EnemySystem";
 import { getControlSlowModifier, getHeroPistolDamage, getSunDropChanceBonus } from "./EvolutionSystem";
+import type { BossSystem } from "./BossSystem";
 
 type ProjectileRuntimeState = BulletState & {
   laneIndex?: number;
@@ -69,7 +70,8 @@ export class ProjectileSystem {
     enemies: EnemySystem,
     economy: EconomySystem,
     serverTimeMs: number,
-    playersById?: PlayerLookup
+    playersById?: PlayerLookup,
+    boss?: BossSystem
   ): FeedbackEvent[] {
     if (deltaSeconds <= 0) {
       return [];
@@ -99,9 +101,44 @@ export class ProjectileSystem {
           this.bulletsById.delete(bullet.id);
           continue;
         }
+
+        const bossHit = boss?.tryHitPeaProjectile({
+          laneIndex: bullet.laneIndex,
+          startX,
+          startY,
+          endX: bullet.x,
+          endY: bullet.y,
+          radius: CombatNumbersV01.plants.peashotter.projectileRadius,
+          economy,
+          serverTimeMs
+        });
+
+        if (bossHit?.hit) {
+          events.push(...bossHit.events);
+          this.bulletsById.delete(bullet.id);
+          continue;
+        }
       }
 
       if (bullet.type === "hero_bullet") {
+        const owner = bullet.ownerPlayerId ? playersById?.get(bullet.ownerPlayerId) : undefined;
+        const bossHit = boss?.tryHitHeroBullet({
+          startX,
+          startY,
+          endX: bullet.x,
+          endY: bullet.y,
+          radius: CombatNumbersV01.weapon.pistol.bulletRadius,
+          economy,
+          serverTimeMs,
+          ...(owner ? { player: owner } : {})
+        });
+
+        if (bossHit?.hit) {
+          events.push(...bossHit.events);
+          this.bulletsById.delete(bullet.id);
+          continue;
+        }
+
         const hit = enemies.findFirstEnemyHitInSegment({
           startX,
           startY,
@@ -111,7 +148,6 @@ export class ProjectileSystem {
         });
 
         if (hit) {
-          const owner = bullet.ownerPlayerId ? playersById?.get(bullet.ownerPlayerId) : undefined;
           const damageResult = enemies.damageEnemy(
             hit.id,
             getHeroPistolDamage(owner),
