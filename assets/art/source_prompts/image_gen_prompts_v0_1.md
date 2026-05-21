@@ -17,7 +17,7 @@ Top-down 2.5D game sprite, slight isometric tilt, clean outline, production asse
 
 ## Batch A - Core Gameplay Entities
 
-Batch A is prompt_ready only in this phase. Final PNGs are not required for gameplay because the renderer uses centralized Phaser Graphics fallbacks when files are missing.
+Batch A was generated in Phase 13A. Final PNGs are integrated when usable, and the renderer still uses centralized Phaser Graphics fallbacks when files are missing.
 
 ### hero_ranger_a
 

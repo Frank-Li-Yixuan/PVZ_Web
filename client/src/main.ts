@@ -49,12 +49,15 @@ import {
 } from "./audio/audioEvents";
 import {
   ArtAssetRegistryV01,
+  P0_ART_ASSET_IDS,
+  getArtAssetPublicUrl,
   getBossAssetKey,
   getEnemyAssetKey,
   getFxAssetKey,
   getHeroAssetKey,
   getPlantAssetKey,
-  getProjectileAssetKey
+  getProjectileAssetKey,
+  shouldLoadArtAssetImage
 } from "./assets/artAssetRegistry";
 import { RenderScaleV01 } from "./assets/renderScaleV01";
 import "./styles.css";
@@ -164,15 +167,18 @@ type PlayerView = {
   body: Phaser.GameObjects.Ellipse;
   ring: Phaser.GameObjects.Ellipse;
   aim: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 };
 
 type PlantView = {
   graphics: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
 };
 
 type EnemyView = {
   graphics: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 };
 
@@ -182,6 +188,7 @@ type BulletView = {
 
 type BossView = {
   graphics: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
 };
 
@@ -204,6 +211,15 @@ class BattleScene extends Phaser.Scene {
 
   constructor() {
     super("BattleScene");
+  }
+
+  preload(): void {
+    for (const assetId of P0_ART_ASSET_IDS) {
+      const entry = ArtAssetRegistryV01[assetId];
+      if (shouldLoadArtAssetImage(entry)) {
+        this.load.image(entry.key, getArtAssetPublicUrl(entry));
+      }
+    }
   }
 
   create(): void {
@@ -475,6 +491,7 @@ class BattleScene extends Phaser.Scene {
         view.body.destroy();
         view.ring.destroy();
         view.aim.destroy();
+        view.sprite.destroy();
         view.label.destroy();
         this.playerViews.delete(playerId);
         this.localPredictedPositions.delete(playerId);
@@ -556,7 +573,17 @@ class BattleScene extends Phaser.Scene {
     const asset = ArtAssetRegistryV01[getHeroAssetKey(player.slot)];
     const renderScale = player.slot === 0 ? RenderScaleV01.heroes.slot0 : RenderScaleV01.heroes.slot1;
     const bodyColor = renderScale.color;
+    const hasSprite = this.textures.exists(asset.key);
 
+    view.sprite.setTexture(asset.key);
+    view.sprite.setVisible(hasSprite);
+    if (hasSprite) {
+      view.sprite.setPosition(player.x, player.y + 3);
+      view.sprite.setOrigin(0.5, 0.68);
+      fitImageToHeight(view.sprite, renderScale.spriteHeight);
+    }
+
+    view.body.setVisible(!hasSprite);
     view.body.setName(asset.key);
     view.body.setFillStyle(bodyColor, isLocal ? 1 : 0.82);
     view.body.setPosition(player.x, player.y);
@@ -586,6 +613,7 @@ class BattleScene extends Phaser.Scene {
     const aim = this.add.graphics().setDepth(14).setName(`${asset.key}_aim`);
     const ring = this.add.ellipse(player.x, player.y, renderScale.ringWidth, renderScale.ringHeight).setDepth(15);
     const body = this.add.ellipse(player.x, player.y, renderScale.width, renderScale.height).setDepth(16).setName(asset.key);
+    const sprite = this.add.image(player.x, player.y, asset.key).setDepth(16).setVisible(false);
     const label = this.add
       .text(player.x, player.y + renderScale.labelOffsetY, `P${player.slot + 1}`, {
         fontFamily: "Arial, sans-serif",
@@ -595,7 +623,7 @@ class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(17);
-    const view = { body, ring, aim, label };
+    const view = { body, ring, aim, sprite, label };
     this.playerViews.set(player.playerId, view);
     return view;
   }
@@ -669,13 +697,20 @@ class BattleScene extends Phaser.Scene {
 
     for (const plant of plants) {
       const view = this.getPlantView(plant);
-      drawPlantPlaceholder(view.graphics, plant);
+      const asset = ArtAssetRegistryV01[getPlantAssetKey(plant.type)];
+      if (this.textures.exists(asset.key)) {
+        renderPlantSprite(view, plant, asset.key);
+      } else {
+        view.sprite.setVisible(false);
+        drawPlantPlaceholder(view.graphics, plant);
+      }
       renderedPlantIds.add(plant.id);
     }
 
     for (const [plantId, view] of this.plantViews) {
       if (!renderedPlantIds.has(plantId)) {
         view.graphics.destroy();
+        view.sprite.destroy();
         this.plantViews.delete(plantId);
       }
     }
@@ -686,7 +721,13 @@ class BattleScene extends Phaser.Scene {
 
     for (const enemy of enemies) {
       const view = this.getEnemyView(enemy);
-      drawEnemyPlaceholder(view.graphics, enemy);
+      const asset = ArtAssetRegistryV01[getEnemyAssetKey(enemy.type)];
+      if (this.textures.exists(asset.key)) {
+        renderEnemySprite(view, enemy, asset.key);
+      } else {
+        view.sprite.setVisible(false);
+        drawEnemyPlaceholder(view.graphics, enemy);
+      }
       view.label.setText(enemyLabel(enemy));
       view.label.setPosition(enemy.x, enemy.y + 25);
       renderedEnemyIds.add(enemy.id);
@@ -695,6 +736,7 @@ class BattleScene extends Phaser.Scene {
     for (const [enemyId, view] of this.enemyViews) {
       if (!renderedEnemyIds.has(enemyId)) {
         view.graphics.destroy();
+        view.sprite.destroy();
         view.label.destroy();
         this.enemyViews.delete(enemyId);
       }
@@ -708,16 +750,17 @@ class BattleScene extends Phaser.Scene {
     }
 
     const view = {
-      graphics: this.add.graphics().setDepth(18),
+      graphics: this.add.graphics().setDepth(19),
+      sprite: this.add.image(enemy.x, enemy.y, ArtAssetRegistryV01[getEnemyAssetKey(enemy.type)].key).setDepth(18).setVisible(false),
       label: this.add
         .text(enemy.x, enemy.y + 25, enemyLabel(enemy), {
           fontFamily: "Arial, sans-serif",
           fontSize: "10px",
           color: "#ffdde4",
-          backgroundColor: "#101513"
+          backgroundColor: RenderScaleV01.ui.textBackground
         })
         .setOrigin(0.5)
-        .setDepth(19)
+        .setDepth(20)
     };
     this.enemyViews.set(enemy.id, view);
     return view;
@@ -744,6 +787,7 @@ class BattleScene extends Phaser.Scene {
     if (!boss) {
       if (this.bossView) {
         this.bossView.graphics.destroy();
+        this.bossView.sprite.destroy();
         this.bossView.label.destroy();
         this.bossView = undefined;
       }
@@ -751,7 +795,13 @@ class BattleScene extends Phaser.Scene {
     }
 
     const view = this.getBossView(boss);
-    drawBossPlaceholder(view.graphics, boss);
+    const asset = ArtAssetRegistryV01[getBossAssetKey(boss.bossType)];
+    if (this.textures.exists(asset.key)) {
+      renderBossSprite(view, boss, asset.key);
+    } else {
+      view.sprite.setVisible(false);
+      drawBossPlaceholder(view.graphics, boss);
+    }
     view.label.setText(bossLabel(boss));
     view.label.setPosition(boss.x, boss.y + 72);
   }
@@ -763,6 +813,7 @@ class BattleScene extends Phaser.Scene {
 
     this.bossView = {
       graphics: this.add.graphics().setDepth(17),
+      sprite: this.add.image(boss.x, boss.y, ArtAssetRegistryV01[getBossAssetKey(boss.bossType)].key).setDepth(17).setVisible(false),
       label: this.add
         .text(boss.x, boss.y + 72, bossLabel(boss), {
           fontFamily: "Arial, sans-serif",
@@ -806,7 +857,8 @@ class BattleScene extends Phaser.Scene {
     }
 
     const view = {
-      graphics: this.add.graphics().setDepth(13)
+      graphics: this.add.graphics().setDepth(13),
+      sprite: this.add.image(0, 0, ArtAssetRegistryV01[getPlantAssetKey(plant.type)].key).setDepth(14).setVisible(false)
     };
     this.plantViews.set(plant.id, view);
     return view;
@@ -1504,6 +1556,112 @@ function enemyLabel(enemy: EnemyState): string {
 function bossLabel(boss: BossState): string {
   const skill = boss.currentSkill ? ` ${boss.currentSkill}` : "";
   return `Ironmaw P${boss.phase} ${boss.hp}/${boss.maxHp}${skill}`;
+}
+
+function renderPlantSprite(view: PlantView, plant: PlantState, textureKey: string): void {
+  const center = getPlantCellCenter({
+    laneIndex: plant.laneIndex as 0 | 1 | 2 | 3 | 4,
+    columnIndex: plant.columnIndex as 0 | 1 | 2 | 3 | 4 | 5 | 6
+  });
+  const plantScale = RenderScaleV01.plants[plant.type];
+
+  view.graphics.clear();
+  view.sprite.setTexture(textureKey);
+  view.sprite.setVisible(true);
+  view.sprite.setPosition(center.x, center.y + 5);
+  view.sprite.setOrigin(0.5, 0.72);
+  fitImageToHeight(view.sprite, plantScale.spriteHeight);
+  drawHpBar(view.graphics, center.x, center.y + plantScale.hpBarOffsetY, plantScale.hpBarWidth, plant.hp, plant.maxHp, plantScale.hpColor);
+}
+
+function renderEnemySprite(view: EnemyView, enemy: EnemyState, textureKey: string): void {
+  const enemyScale = RenderScaleV01.enemies[enemy.type];
+
+  view.graphics.clear();
+  view.sprite.setTexture(textureKey);
+  view.sprite.setVisible(true);
+  view.sprite.setPosition(enemy.x, enemy.y + 8);
+  view.sprite.setOrigin(0.5, 0.7);
+  fitImageToHeight(view.sprite, enemyScale.spriteHeight);
+  if (enemy.state === "ATTACKING_PLANT") {
+    view.graphics.lineStyle(3, 0xffd56b, 0.9);
+    view.graphics.strokeEllipse(enemy.x, enemy.y + 2, enemyScale.width + 18, enemyScale.height + 14);
+  }
+  if (enemy.slowed) {
+    view.graphics.lineStyle(3, 0x8fc4ff, 0.9);
+    view.graphics.strokeEllipse(
+      enemy.x,
+      enemy.y + 2,
+      enemyScale.width + RenderScaleV01.fx.slowOutlineExtraWidth,
+      enemyScale.height + RenderScaleV01.fx.slowOutlineExtraHeight
+    );
+  }
+  drawHpBar(
+    view.graphics,
+    enemy.x,
+    enemy.y - enemyScale.height / 2 - 9,
+    enemyScale.width + enemyScale.hpBarWidthExtra,
+    enemy.hp,
+    enemy.maxHp,
+    0xff8f7e
+  );
+}
+
+function renderBossSprite(view: BossView, boss: BossState, textureKey: string): void {
+  const bossScale = RenderScaleV01.boss;
+
+  view.graphics.clear();
+  view.sprite.setTexture(textureKey);
+  view.sprite.setVisible(true);
+  view.sprite.setPosition(boss.x, boss.y + 18);
+  view.sprite.setOrigin(0.5, 0.65);
+  fitImageToHeight(view.sprite, bossScale.spriteHeight);
+
+  if (boss.currentSkill === "charge_windup") {
+    view.graphics.lineStyle(4, 0xffd56b, 0.62);
+    view.graphics.lineBetween(
+      boss.x - CombatNumbersV01.boss.ironmaw.charge.failedChargeDistance,
+      boss.y,
+      boss.x + CombatNumbersV01.boss.ironmaw.collisionRadius,
+      boss.y
+    );
+    view.graphics.strokeCircle(boss.x, boss.y, CombatNumbersV01.boss.ironmaw.collisionRadius + 10);
+  }
+
+  if (boss.weakPointActive && boss.weakPointX !== undefined && boss.weakPointY !== undefined) {
+    view.graphics.fillStyle(0xffef93, 0.96);
+    view.graphics.fillCircle(boss.weakPointX, boss.weakPointY, RenderScaleV01.fx.bossWeakPointRadius);
+    view.graphics.lineStyle(3, 0xff7f6e, 0.95);
+    view.graphics.strokeCircle(boss.weakPointX, boss.weakPointY, RenderScaleV01.fx.bossWeakPointOutlineRadius);
+  }
+
+  drawHpBar(
+    view.graphics,
+    boss.x,
+    boss.y + bossScale.hpBarOffsetY,
+    bossScale.hpBarWidth,
+    boss.hp,
+    boss.maxHp,
+    boss.phase === 2 ? 0xff8f7e : 0xd7a96b
+  );
+  if (boss.interruptRequired > 0 && (boss.charging || boss.interruptProgress > 0)) {
+    drawHpBar(
+      view.graphics,
+      boss.x,
+      boss.y + bossScale.interruptBarOffsetY,
+      bossScale.interruptBarWidth,
+      boss.interruptProgress,
+      boss.interruptRequired,
+      0x8fc4ff
+    );
+  }
+}
+
+function fitImageToHeight(image: Phaser.GameObjects.Image, displayHeight: number): void {
+  const sourceHeight = image.height || displayHeight;
+  const sourceWidth = image.width || displayHeight;
+  const displayWidth = (sourceWidth / sourceHeight) * displayHeight;
+  image.setDisplaySize(displayWidth, displayHeight);
 }
 
 function drawBossPlaceholder(graphics: Phaser.GameObjects.Graphics, boss: BossState): void {

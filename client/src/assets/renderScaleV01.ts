@@ -7,6 +7,7 @@ export const RenderScaleV01 = {
       ringHeight: 30,
       aimLength: 42,
       labelOffsetY: 26,
+      spriteHeight: 56,
       color: 0x4fc3d7
     },
     slot1: {
@@ -16,6 +17,7 @@ export const RenderScaleV01 = {
       ringHeight: 30,
       aimLength: 42,
       labelOffsetY: 26,
+      spriteHeight: 56,
       color: 0xf2a64b
     }
   },
@@ -32,6 +34,7 @@ export const RenderScaleV01 = {
       leafHeight: 14,
       leafOffsetX: 14,
       leafOffsetY: 12,
+      spriteHeight: 62,
       bodyColor: 0xf3c84b,
       leafColor: 0x5aa75d,
       hpColor: 0xf3c84b
@@ -51,6 +54,7 @@ export const RenderScaleV01 = {
       muzzleRadius: 7,
       muzzleOffsetX: 26,
       muzzleOffsetY: -6,
+      spriteHeight: 62,
       hpBarWidth: 58,
       hpBarOffsetY: -34,
       bodyColor: 0x4fae68,
@@ -63,6 +67,7 @@ export const RenderScaleV01 = {
       shadowOffsetY: 18,
       bodyWidth: 56,
       bodyHeight: 50,
+      spriteHeight: 66,
       hpBarWidth: 62,
       hpBarOffsetY: -34,
       bodyColor: 0x8f6a3b,
@@ -81,6 +86,7 @@ export const RenderScaleV01 = {
       eyeOffsetY: -7,
       eyeRadius: 3,
       hpBarWidthExtra: 6,
+      spriteHeight: 58,
       color: 0x8fb05d
     },
     runner: {
@@ -93,6 +99,7 @@ export const RenderScaleV01 = {
       eyeOffsetY: -7,
       eyeRadius: 3,
       hpBarWidthExtra: 6,
+      spriteHeight: 56,
       color: 0xd96f4d
     },
     brute: {
@@ -105,6 +112,7 @@ export const RenderScaleV01 = {
       eyeOffsetY: -7,
       eyeRadius: 3,
       hpBarWidthExtra: 6,
+      spriteHeight: 78,
       color: 0x7b6a84
     }
   },
@@ -126,6 +134,7 @@ export const RenderScaleV01 = {
     hpBarOffsetY: -88,
     interruptBarWidth: 116,
     interruptBarOffsetY: -78,
+    spriteHeight: 176,
     phase1Color: 0x7a5363,
     phase2Color: 0xb94f45,
     headColor: 0x49364a,

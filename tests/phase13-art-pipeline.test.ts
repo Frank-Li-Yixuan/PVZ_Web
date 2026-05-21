@@ -4,7 +4,9 @@ import { describe, expect, test } from "vitest";
 import {
   ART_ASSET_STATUS_VALUES,
   ArtAssetRegistryV01,
+  BATCH_A_ART_ASSET_IDS,
   P0_ART_ASSET_IDS,
+  getArtAssetPublicUrl,
   getBossAssetKey,
   getEnemyAssetKey,
   getFxAssetKey,
@@ -73,6 +75,32 @@ describe("Phase 13 art asset registry", () => {
       expect(entry.path).toMatch(/^assets\/art\/(sprites|placeholders)\//);
       expect(entry.description.length).toBeGreaterThan(0);
       expectContainsNoExternalIpTerms(`${entry.id} ${entry.key} ${entry.path} ${entry.description}`);
+    }
+  });
+
+  test("resolves Batch A generated assets to Phaser-loadable public URLs", () => {
+    expect(BATCH_A_ART_ASSET_IDS).toEqual([
+      "hero_ranger_a",
+      "hero_ranger_b",
+      "plant_sunbloom",
+      "plant_peashotter",
+      "plant_barkwall",
+      "enemy_shambler",
+      "enemy_runner",
+      "enemy_brute",
+      "boss_ironmaw"
+    ]);
+
+    for (const assetId of BATCH_A_ART_ASSET_IDS) {
+      const entry = ArtAssetRegistryV01[assetId];
+      const isGeneratedLike = ["generated", "integrated", "approved"].includes(entry.status);
+      if (isGeneratedLike) {
+        expect(entry.path).toMatch(/^assets\/art\/sprites\//);
+        expect(existsSync(resolve(process.cwd(), entry.path))).toBe(true);
+        expect(getArtAssetPublicUrl(entry)).toBe(`/${entry.path.replace(/^assets\//, "")}`);
+      } else {
+        expect(entry.status).toBe("prompt_ready");
+      }
     }
   });
 

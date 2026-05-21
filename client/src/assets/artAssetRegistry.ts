@@ -36,6 +36,20 @@ export const P0_ART_ASSET_IDS = [
 ] as const;
 
 export type ArtAssetId = (typeof P0_ART_ASSET_IDS)[number];
+
+export const BATCH_A_ART_ASSET_IDS = [
+  "hero_ranger_a",
+  "hero_ranger_b",
+  "plant_sunbloom",
+  "plant_peashotter",
+  "plant_barkwall",
+  "enemy_shambler",
+  "enemy_runner",
+  "enemy_brute",
+  "boss_ironmaw"
+] as const satisfies readonly ArtAssetId[];
+
+export type BatchAArtAssetId = (typeof BATCH_A_ART_ASSET_IDS)[number];
 export type ArtAssetPriority = "P0";
 export type ArtAssetCategory = "hero" | "plant" | "enemy" | "boss" | "projectile" | "map" | "base" | "ui" | "fx";
 export type ArtAssetSource = "placeholder" | "image-gen" | "game-studio" | "manual";
@@ -58,81 +72,81 @@ export const ArtAssetRegistryV01 = {
     id: "hero_ranger_a",
     key: "hero_ranger_a_idle",
     category: "hero",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/heroes/hero_ranger_a_placeholder.png",
+    path: "assets/art/sprites/heroes/hero_ranger_a_idle.png",
     description: "Cool-accent greenhouse defender hero for player slot 1."
   }),
   hero_ranger_b: entry({
     id: "hero_ranger_b",
     key: "hero_ranger_b_idle",
     category: "hero",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/heroes/hero_ranger_b_placeholder.png",
+    path: "assets/art/sprites/heroes/hero_ranger_b_idle.png",
     description: "Warm-accent greenhouse defender hero for player slot 2."
   }),
   plant_sunbloom: entry({
     id: "plant_sunbloom",
     key: "plant_sunbloom_idle",
     category: "plant",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/plants/plant_sunbloom_placeholder.png",
+    path: "assets/art/sprites/plants/plant_sunbloom_idle.png",
     description: "Solar economy plant with a glowing round energy core."
   }),
   plant_peashotter: entry({
     id: "plant_peashotter",
     key: "plant_peashotter_idle",
     category: "plant",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/plants/plant_peashotter_placeholder.png",
+    path: "assets/art/sprites/plants/plant_peashotter_idle.png",
     description: "Bio-seed launcher plant with a clear forward barrel silhouette."
   }),
   plant_barkwall: entry({
     id: "plant_barkwall",
     key: "plant_barkwall_idle",
     category: "plant",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/plants/plant_barkwall_placeholder.png",
+    path: "assets/art/sprites/plants/plant_barkwall_idle.png",
     description: "Defensive bark shield plant with a broad blocking profile."
   }),
   enemy_shambler: entry({
     id: "enemy_shambler",
     key: "enemy_shambler_idle",
     category: "enemy",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/enemies/enemy_shambler_placeholder.png",
+    path: "assets/art/sprites/enemies/enemy_shambler_idle.png",
     description: "Standard polluted lane enemy with medium size and speed."
   }),
   enemy_runner: entry({
     id: "enemy_runner",
     key: "enemy_runner_idle",
     category: "enemy",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/enemies/enemy_runner_placeholder.png",
+    path: "assets/art/sprites/enemies/enemy_runner_idle.png",
     description: "Fast slim polluted enemy with a forward-leaning silhouette."
   }),
   enemy_brute: entry({
     id: "enemy_brute",
     key: "enemy_brute_idle",
     category: "enemy",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/enemies/enemy_brute_placeholder.png",
+    path: "assets/art/sprites/enemies/enemy_brute_idle.png",
     description: "Large armored polluted enemy with a heavy blocking profile."
   }),
   boss_ironmaw: entry({
     id: "boss_ironmaw",
     key: "boss_ironmaw_phase1",
     category: "boss",
-    status: "prompt_ready",
+    status: "integrated",
     source: "image-gen",
-    path: "assets/art/placeholders/boss/boss_ironmaw_placeholder.png",
+    path: "assets/art/sprites/boss/boss_ironmaw_phase1.png",
     description: "Final siege beast boss with rusted armor and a bright weak point."
   }),
   projectile_hero_bullet: entry({
@@ -307,6 +321,14 @@ export function getFxAssetKey(fxType: FxAssetType): ArtAssetId {
 
 export function getArtAssetEntry(assetId: ArtAssetId): ArtAssetEntry {
   return ArtAssetRegistryV01[assetId];
+}
+
+export function getArtAssetPublicUrl(entry: ArtAssetEntry): string {
+  return `/${entry.path.replace(/^assets\//, "")}`;
+}
+
+export function shouldLoadArtAssetImage(entry: ArtAssetEntry): boolean {
+  return ["generated", "integrated", "approved"].includes(entry.status) && entry.path.startsWith("assets/art/sprites/");
 }
 
 function entry(config: Omit<ArtAssetEntry, "priority" | "fallback">): ArtAssetEntry {

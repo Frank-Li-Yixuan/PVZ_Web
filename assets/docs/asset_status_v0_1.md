@@ -18,8 +18,9 @@ rejected
 
 - Phase 13 adds centralized asset registry metadata in `client/src/assets/artAssetRegistry.ts`.
 - Phase 13 adds centralized gameplay render dimensions and fallback colors in `client/src/assets/renderScaleV01.ts`.
-- Runtime uses Phaser Graphics fallback for P0 assets when final PNG files are missing.
+- Runtime loads generated PNGs through Phaser when present and uses Phaser Graphics fallback when final PNG files are missing.
 - Batch A prompts are ready in `assets/art/source_prompts/image_gen_prompts_v0_1.md`.
+- Phase 13A generated Batch A PNGs with image-gen, removed chroma-key backgrounds locally, and integrated usable outputs.
 - No external copyrighted game assets, character names, studio names, logos, or unclear-license files are integrated.
 - Gameplay readability remains the approval gate before visual detail.
 
@@ -27,15 +28,15 @@ rejected
 
 | Asset ID | Category | Priority | Status | Source | Path | Notes |
 |---|---|---|---|---|---|---|
-| hero_ranger_a | Hero | P0 | prompt_ready | image-gen | assets/art/placeholders/heroes/hero_ranger_a_placeholder.png | Cool-accent hero prompt ready; Phaser Graphics fallback integrated. |
-| hero_ranger_b | Hero | P0 | prompt_ready | image-gen | assets/art/placeholders/heroes/hero_ranger_b_placeholder.png | Warm-accent hero prompt ready; Phaser Graphics fallback integrated. |
-| plant_sunbloom | Plant | P0 | prompt_ready | image-gen | assets/art/placeholders/plants/plant_sunbloom_placeholder.png | Economy plant prompt ready; circular yellow-green fallback integrated. |
-| plant_peashotter | Plant | P0 | prompt_ready | image-gen | assets/art/placeholders/plants/plant_peashotter_placeholder.png | Shooter plant prompt ready; green and teal launcher fallback integrated. |
-| plant_barkwall | Plant | P0 | prompt_ready | image-gen | assets/art/placeholders/plants/plant_barkwall_placeholder.png | Defensive plant prompt ready; broad brown blocker fallback integrated. |
-| enemy_shambler | Enemy | P0 | prompt_ready | image-gen | assets/art/placeholders/enemies/enemy_shambler_placeholder.png | Standard enemy prompt ready; medium green fallback integrated. |
-| enemy_runner | Enemy | P0 | prompt_ready | image-gen | assets/art/placeholders/enemies/enemy_runner_placeholder.png | Fast enemy prompt ready; slim orange-red fallback integrated. |
-| enemy_brute | Enemy | P0 | prompt_ready | image-gen | assets/art/placeholders/enemies/enemy_brute_placeholder.png | Heavy enemy prompt ready; large muted armored fallback integrated. |
-| boss_ironmaw | Boss | P0 | prompt_ready | image-gen | assets/art/placeholders/boss/boss_ironmaw_placeholder.png | Boss prompt ready; large phase-aware fallback and weak point marker integrated. |
+| hero_ranger_a | Hero | P0 | integrated | image-gen | assets/art/sprites/heroes/hero_ranger_a_idle.png | Phase 13A generated cool-accent hero; transparent PNG integrated with graphics fallback retained. |
+| hero_ranger_b | Hero | P0 | integrated | image-gen | assets/art/sprites/heroes/hero_ranger_b_idle.png | Phase 13A generated warm-accent hero; transparent PNG integrated with graphics fallback retained. |
+| plant_sunbloom | Plant | P0 | integrated | image-gen | assets/art/sprites/plants/plant_sunbloom_idle.png | Phase 13A generated economy plant; transparent PNG integrated with graphics fallback retained. |
+| plant_peashotter | Plant | P0 | integrated | image-gen | assets/art/sprites/plants/plant_peashotter_idle.png | Phase 13A generated bio-seed launcher plant; transparent PNG integrated with graphics fallback retained. |
+| plant_barkwall | Plant | P0 | integrated | image-gen | assets/art/sprites/plants/plant_barkwall_idle.png | Phase 13A generated defensive bark plant; transparent PNG integrated with graphics fallback retained. |
+| enemy_shambler | Enemy | P0 | integrated | image-gen | assets/art/sprites/enemies/enemy_shambler_idle.png | Phase 13A generated standard polluted enemy; transparent PNG integrated with graphics fallback retained. |
+| enemy_runner | Enemy | P0 | integrated | image-gen | assets/art/sprites/enemies/enemy_runner_idle.png | Phase 13A generated fast polluted enemy; transparent PNG integrated with graphics fallback retained. |
+| enemy_brute | Enemy | P0 | integrated | image-gen | assets/art/sprites/enemies/enemy_brute_idle.png | Phase 13A generated heavy armored enemy; transparent PNG integrated with graphics fallback retained. |
+| boss_ironmaw | Boss | P0 | integrated | image-gen | assets/art/sprites/boss/boss_ironmaw_phase1.png | Phase 13A generated phase 1 boss; transparent PNG integrated with graphics fallback retained. |
 | projectile_hero_bullet | Projectile | P0 | integrated | placeholder | assets/art/placeholders/projectiles/projectile_hero_bullet_placeholder.png | Bright small bullet fallback integrated. |
 | projectile_pea | Projectile | P0 | integrated | placeholder | assets/art/placeholders/projectiles/projectile_pea_placeholder.png | Green bio-energy projectile fallback integrated. |
 | tile_ground_lane | Map | P0 | integrated | placeholder | assets/art/placeholders/environment/tile_ground_lane_placeholder.png | Lane band fallback integrated through centralized map colors. |
@@ -50,4 +51,4 @@ rejected
 
 ## Phase 13 Gate Notes
 
-Batch A was not generated in this pass. The image prompts are prompt_ready, while all P0 gameplay objects have visible Phaser Graphics placeholders or tracked UI/FX placeholder slots.
+Batch A is generated and integrated for V0.1 core units. Remaining P0 projectile, map, UI, and FX entries keep placeholder/fallback status unless listed above.
