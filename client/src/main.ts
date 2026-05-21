@@ -47,6 +47,16 @@ import {
   audioEventIdsFromFeedback,
   type AudioEventId
 } from "./audio/audioEvents";
+import {
+  ArtAssetRegistryV01,
+  getBossAssetKey,
+  getEnemyAssetKey,
+  getFxAssetKey,
+  getHeroAssetKey,
+  getPlantAssetKey,
+  getProjectileAssetKey
+} from "./assets/artAssetRegistry";
+import { RenderScaleV01 } from "./assets/renderScaleV01";
 import "./styles.css";
 
 let battleScene: BattleScene | undefined;
@@ -318,31 +328,48 @@ class BattleScene extends Phaser.Scene {
 
   private drawBattlefield(): void {
     const graphics = this.add.graphics();
+    const laneAsset = ArtAssetRegistryV01.tile_ground_lane;
+    const cellAsset = ArtAssetRegistryV01.tile_plant_cell;
+    const baseAsset = ArtAssetRegistryV01.base_greenhouse_core;
+    const mapScale = RenderScaleV01.map;
+    graphics.setName(`${laneAsset.key}_${cellAsset.key}_${baseAsset.key}`);
 
-    graphics.fillStyle(0x192820, 1);
+    graphics.fillStyle(mapScale.worldBackground, 1);
     graphics.fillRect(0, 0, MapConfigV01.worldWidthPx, MapConfigV01.worldHeightPx);
 
     for (const laneIndex of MapConfigV01.laneIndices) {
       const laneY = MapConfigV01.plantGrid.originY + laneIndex * MapConfigV01.laneHeightPx;
-      graphics.fillStyle(laneIndex % 2 === 0 ? 0x284432 : 0x22382c, 1);
+      graphics.fillStyle(laneIndex % 2 === 0 ? mapScale.laneEvenColor : mapScale.laneOddColor, 1);
       graphics.fillRoundedRect(
-        MapConfigV01.plantGrid.originX - 10,
-        laneY + 4,
-        MapConfigV01.cellWidthPx * MapConfigV01.plantableColumnCount + 20,
-        MapConfigV01.laneHeightPx - 8,
-        4
+        MapConfigV01.plantGrid.originX - mapScale.laneInsetX,
+        laneY + mapScale.laneInsetY,
+        MapConfigV01.cellWidthPx * MapConfigV01.plantableColumnCount + mapScale.laneInsetX * 2,
+        MapConfigV01.laneHeightPx - mapScale.laneInsetY * 2,
+        mapScale.laneCornerRadius
       );
 
       for (const columnIndex of MapConfigV01.columnIndices) {
         const x = MapConfigV01.plantGrid.originX + columnIndex * MapConfigV01.cellWidthPx;
-        graphics.fillStyle(0x2f513a, 0.34);
-        graphics.fillRoundedRect(x + 8, laneY + 9, MapConfigV01.cellWidthPx - 16, MapConfigV01.laneHeightPx - 18, 5);
-        graphics.lineStyle(1, 0x87b875, 0.46);
-        graphics.strokeRoundedRect(x + 8, laneY + 9, MapConfigV01.cellWidthPx - 16, MapConfigV01.laneHeightPx - 18, 5);
+        graphics.fillStyle(mapScale.cellFillColor, mapScale.cellFillAlpha);
+        graphics.fillRoundedRect(
+          x + mapScale.cellInsetX,
+          laneY + mapScale.cellInsetY,
+          MapConfigV01.cellWidthPx - mapScale.cellInsetX * 2,
+          MapConfigV01.laneHeightPx - mapScale.cellInsetY * 2,
+          mapScale.cellCornerRadius
+        );
+        graphics.lineStyle(1, mapScale.cellOutlineColor, mapScale.cellOutlineAlpha);
+        graphics.strokeRoundedRect(
+          x + mapScale.cellInsetX,
+          laneY + mapScale.cellInsetY,
+          MapConfigV01.cellWidthPx - mapScale.cellInsetX * 2,
+          MapConfigV01.laneHeightPx - mapScale.cellInsetY * 2,
+          mapScale.cellCornerRadius
+        );
       }
     }
 
-    graphics.fillStyle(0x366354, 1);
+    graphics.fillStyle(mapScale.baseFillColor, 1);
     graphics.fillRoundedRect(
       MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
       MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
@@ -350,7 +377,7 @@ class BattleScene extends Phaser.Scene {
       MapConfigV01.base.height,
       8
     );
-    graphics.lineStyle(3, 0xe8dfbd, 0.7);
+    graphics.lineStyle(3, mapScale.baseOutlineColor, 0.7);
     graphics.strokeRoundedRect(
       MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
       MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
@@ -359,7 +386,7 @@ class BattleScene extends Phaser.Scene {
       8
     );
 
-    graphics.fillStyle(0x643b52, 1);
+    graphics.fillStyle(mapScale.spawnFillColor, 1);
     graphics.fillRoundedRect(
       MapConfigV01.enemySpawnMarker.centerX - MapConfigV01.enemySpawnMarker.width / 2,
       MapConfigV01.enemySpawnMarker.centerY - MapConfigV01.enemySpawnMarker.height / 2,
@@ -526,18 +553,26 @@ class BattleScene extends Phaser.Scene {
 
   private renderPlayer(player: PlayerState, isLocal: boolean): void {
     const view = this.getPlayerView(player);
-    const bodyColor = player.slot === 0 ? 0x4fc3d7 : 0xf2a64b;
+    const asset = ArtAssetRegistryV01[getHeroAssetKey(player.slot)];
+    const renderScale = player.slot === 0 ? RenderScaleV01.heroes.slot0 : RenderScaleV01.heroes.slot1;
+    const bodyColor = renderScale.color;
 
+    view.body.setName(asset.key);
     view.body.setFillStyle(bodyColor, isLocal ? 1 : 0.82);
     view.body.setPosition(player.x, player.y);
     view.ring.setPosition(player.x, player.y);
     view.ring.setStrokeStyle(isLocal ? 3 : 2, isLocal ? 0xf7f2df : 0x1d2521, 0.9);
     view.label.setText(isLocal ? `P${player.slot + 1} YOU` : `P${player.slot + 1}`);
-    view.label.setPosition(player.x, player.y + 26);
+    view.label.setPosition(player.x, player.y + renderScale.labelOffsetY);
 
     view.aim.clear();
     view.aim.lineStyle(3, bodyColor, 0.9);
-    view.aim.lineBetween(player.x, player.y, player.x + player.aimX * 42, player.y + player.aimY * 42);
+    view.aim.lineBetween(
+      player.x,
+      player.y,
+      player.x + player.aimX * renderScale.aimLength,
+      player.y + player.aimY * renderScale.aimLength
+    );
   }
 
   private getPlayerView(player: PlayerState): PlayerView {
@@ -546,15 +581,17 @@ class BattleScene extends Phaser.Scene {
       return existing;
     }
 
-    const aim = this.add.graphics().setDepth(14);
-    const ring = this.add.ellipse(player.x, player.y, 42, 30).setDepth(15);
-    const body = this.add.ellipse(player.x, player.y, 32, 40).setDepth(16);
+    const asset = ArtAssetRegistryV01[getHeroAssetKey(player.slot)];
+    const renderScale = player.slot === 0 ? RenderScaleV01.heroes.slot0 : RenderScaleV01.heroes.slot1;
+    const aim = this.add.graphics().setDepth(14).setName(`${asset.key}_aim`);
+    const ring = this.add.ellipse(player.x, player.y, renderScale.ringWidth, renderScale.ringHeight).setDepth(15);
+    const body = this.add.ellipse(player.x, player.y, renderScale.width, renderScale.height).setDepth(16).setName(asset.key);
     const label = this.add
-      .text(player.x, player.y + 26, `P${player.slot + 1}`, {
+      .text(player.x, player.y + renderScale.labelOffsetY, `P${player.slot + 1}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "11px",
         color: "#f7f2df",
-        backgroundColor: "#101513"
+        backgroundColor: RenderScaleV01.ui.textBackground
       })
       .setOrigin(0.5)
       .setDepth(17);
@@ -1471,11 +1508,15 @@ function bossLabel(boss: BossState): string {
 
 function drawBossPlaceholder(graphics: Phaser.GameObjects.Graphics, boss: BossState): void {
   graphics.clear();
-  const bodyColor = boss.phase === 2 ? 0xb94f45 : 0x7a5363;
+  const asset = ArtAssetRegistryV01[getBossAssetKey(boss.bossType)];
+  const bossScale = RenderScaleV01.boss;
+  const weakPointScale = RenderScaleV01.fx;
+  graphics.setName(asset.key);
+  const bodyColor = boss.phase === 2 ? bossScale.phase2Color : bossScale.phase1Color;
   const outlineColor = boss.currentSkill === "charge_windup" ? 0xffd56b : 0x25131b;
 
   graphics.fillStyle(0x08100c, 0.32);
-  graphics.fillEllipse(boss.x, boss.y + 48, 156, 24);
+  graphics.fillEllipse(boss.x, boss.y + bossScale.shadowOffsetY, bossScale.shadowWidth, bossScale.shadowHeight);
 
   if (boss.currentSkill === "charge_windup") {
     graphics.lineStyle(4, 0xffd56b, 0.62);
@@ -1489,99 +1530,203 @@ function drawBossPlaceholder(graphics: Phaser.GameObjects.Graphics, boss: BossSt
   }
 
   graphics.fillStyle(bodyColor, 1);
-  graphics.fillRoundedRect(boss.x - 62, boss.y - 44, 124, 92, 8);
-  graphics.fillStyle(0x49364a, 1);
-  graphics.fillRoundedRect(boss.x - 46, boss.y - 68, 92, 34, 7);
-  graphics.fillStyle(0xf4d2a6, 1);
-  graphics.fillCircle(boss.x - 24, boss.y - 50, 6);
-  graphics.fillCircle(boss.x + 24, boss.y - 50, 6);
+  graphics.fillRoundedRect(
+    boss.x - bossScale.width / 2,
+    boss.y - bossScale.height / 2,
+    bossScale.width,
+    bossScale.height,
+    bossScale.cornerRadius
+  );
+  graphics.fillStyle(bossScale.headColor, 1);
+  graphics.fillRoundedRect(
+    boss.x - bossScale.headWidth / 2,
+    boss.y + bossScale.headOffsetY,
+    bossScale.headWidth,
+    bossScale.headHeight,
+    bossScale.headCornerRadius
+  );
+  graphics.fillStyle(bossScale.eyeColor, 1);
+  graphics.fillCircle(boss.x - bossScale.eyeOffsetX, boss.y + bossScale.eyeOffsetY, bossScale.eyeRadius);
+  graphics.fillCircle(boss.x + bossScale.eyeOffsetX, boss.y + bossScale.eyeOffsetY, bossScale.eyeRadius);
   graphics.lineStyle(4, outlineColor, 0.95);
-  graphics.strokeRoundedRect(boss.x - 62, boss.y - 44, 124, 92, 8);
+  graphics.strokeRoundedRect(
+    boss.x - bossScale.width / 2,
+    boss.y - bossScale.height / 2,
+    bossScale.width,
+    bossScale.height,
+    bossScale.cornerRadius
+  );
 
   if (boss.weakPointActive && boss.weakPointX !== undefined && boss.weakPointY !== undefined) {
+    graphics.setName(`${asset.key}_${ArtAssetRegistryV01[getFxAssetKey("boss_weakpoint")].key}`);
     graphics.fillStyle(0xffef93, 0.96);
-    graphics.fillCircle(boss.weakPointX, boss.weakPointY, 13);
+    graphics.fillCircle(boss.weakPointX, boss.weakPointY, weakPointScale.bossWeakPointRadius);
     graphics.lineStyle(3, 0xff7f6e, 0.95);
-    graphics.strokeCircle(boss.weakPointX, boss.weakPointY, 19);
+    graphics.strokeCircle(boss.weakPointX, boss.weakPointY, weakPointScale.bossWeakPointOutlineRadius);
   }
 
-  drawHpBar(graphics, boss.x, boss.y - 88, 148, boss.hp, boss.maxHp, boss.phase === 2 ? 0xff8f7e : 0xd7a96b);
+  drawHpBar(
+    graphics,
+    boss.x,
+    boss.y + bossScale.hpBarOffsetY,
+    bossScale.hpBarWidth,
+    boss.hp,
+    boss.maxHp,
+    boss.phase === 2 ? 0xff8f7e : 0xd7a96b
+  );
   if (boss.interruptRequired > 0 && (boss.charging || boss.interruptProgress > 0)) {
-    drawHpBar(graphics, boss.x, boss.y - 78, 116, boss.interruptProgress, boss.interruptRequired, 0x8fc4ff);
+    drawHpBar(
+      graphics,
+      boss.x,
+      boss.y + bossScale.interruptBarOffsetY,
+      bossScale.interruptBarWidth,
+      boss.interruptProgress,
+      boss.interruptRequired,
+      0x8fc4ff
+    );
   }
 }
 
 function drawEnemyPlaceholder(graphics: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
   graphics.clear();
-  const color = enemy.type === "runner" ? 0xd96f4d : enemy.type === "brute" ? 0x7b6a84 : 0x8fb05d;
-  const width = enemy.type === "brute" ? 42 : enemy.type === "runner" ? 30 : 34;
-  const height = enemy.type === "brute" ? 48 : 38;
+  const asset = ArtAssetRegistryV01[getEnemyAssetKey(enemy.type)];
+  const enemyScale = RenderScaleV01.enemies[enemy.type];
+  graphics.setName(asset.key);
 
   graphics.fillStyle(0x08100c, 0.26);
-  graphics.fillEllipse(enemy.x, enemy.y + 19, width + 18, 14);
-  graphics.fillStyle(color, 1);
-  graphics.fillRoundedRect(enemy.x - width / 2, enemy.y - height / 2, width, height, 7);
+  graphics.fillEllipse(
+    enemy.x,
+    enemy.y + enemyScale.shadowOffsetY,
+    enemyScale.width + enemyScale.shadowExtraWidth,
+    enemyScale.shadowHeight
+  );
+  graphics.fillStyle(enemyScale.color, 1);
+  graphics.fillRoundedRect(
+    enemy.x - enemyScale.width / 2,
+    enemy.y - enemyScale.height / 2,
+    enemyScale.width,
+    enemyScale.height,
+    7
+  );
   graphics.fillStyle(0x191a18, 1);
-  graphics.fillCircle(enemy.x - 7, enemy.y - 7, 3);
-  graphics.fillCircle(enemy.x + 7, enemy.y - 7, 3);
+  graphics.fillCircle(enemy.x - enemyScale.eyeOffsetX, enemy.y + enemyScale.eyeOffsetY, enemyScale.eyeRadius);
+  graphics.fillCircle(enemy.x + enemyScale.eyeOffsetX, enemy.y + enemyScale.eyeOffsetY, enemyScale.eyeRadius);
   graphics.lineStyle(2, enemy.state === "ATTACKING_PLANT" ? 0xffd56b : 0x1a261f, 0.95);
-  graphics.strokeRoundedRect(enemy.x - width / 2, enemy.y - height / 2, width, height, 7);
+  graphics.strokeRoundedRect(
+    enemy.x - enemyScale.width / 2,
+    enemy.y - enemyScale.height / 2,
+    enemyScale.width,
+    enemyScale.height,
+    7
+  );
   if (enemy.slowed) {
     graphics.lineStyle(3, 0x8fc4ff, 0.9);
-    graphics.strokeEllipse(enemy.x, enemy.y + 2, width + 12, height + 10);
+    graphics.strokeEllipse(
+      enemy.x,
+      enemy.y + 2,
+      enemyScale.width + RenderScaleV01.fx.slowOutlineExtraWidth,
+      enemyScale.height + RenderScaleV01.fx.slowOutlineExtraHeight
+    );
   }
-  drawHpBar(graphics, enemy.x, enemy.y - height / 2 - 9, width + 6, enemy.hp, enemy.maxHp, 0xff8f7e);
+  drawHpBar(
+    graphics,
+    enemy.x,
+    enemy.y - enemyScale.height / 2 - 9,
+    enemyScale.width + enemyScale.hpBarWidthExtra,
+    enemy.hp,
+    enemy.maxHp,
+    0xff8f7e
+  );
 }
 
 function drawBulletPlaceholder(graphics: Phaser.GameObjects.Graphics, bullet: BulletState): void {
   graphics.clear();
-  const color = bullet.type === "pea_projectile" ? 0x8de36c : 0xfff1a6;
-  const radius = bullet.type === "pea_projectile" ? 6 : 4;
-  graphics.fillStyle(color, 1);
-  graphics.fillCircle(bullet.x, bullet.y, radius);
+  const asset = ArtAssetRegistryV01[getProjectileAssetKey(bullet.type)];
+  const projectileScale = RenderScaleV01.projectiles[bullet.type];
+  graphics.setName(asset.key);
+  graphics.fillStyle(projectileScale.color, 1);
+  graphics.fillCircle(bullet.x, bullet.y, projectileScale.radius);
   graphics.lineStyle(2, 0xf7f2df, 0.6);
-  graphics.strokeCircle(bullet.x, bullet.y, radius + 2);
+  graphics.strokeCircle(bullet.x, bullet.y, projectileScale.radius + projectileScale.outlineRadiusExtra);
 }
 
 function drawPlantPlaceholder(graphics: Phaser.GameObjects.Graphics, plant: PlantState): void {
+  const asset = ArtAssetRegistryV01[getPlantAssetKey(plant.type)];
   const center = getPlantCellCenter({
     laneIndex: plant.laneIndex as 0 | 1 | 2 | 3 | 4,
     columnIndex: plant.columnIndex as 0 | 1 | 2 | 3 | 4 | 5 | 6
   });
 
   graphics.clear();
+  graphics.setName(asset.key);
   graphics.fillStyle(0x08100c, 0.22);
-  graphics.fillEllipse(center.x, center.y + 18, 54, 14);
 
   if (plant.type === "sunbloom") {
-    graphics.fillStyle(0x5aa75d, 1);
-    graphics.fillEllipse(center.x - 14, center.y + 12, 28, 14);
-    graphics.fillEllipse(center.x + 14, center.y + 12, 28, 14);
-    graphics.fillStyle(0xf3c84b, 1);
-    graphics.fillCircle(center.x, center.y - 2, 22);
+    const plantScale = RenderScaleV01.plants.sunbloom;
+    graphics.fillEllipse(center.x, center.y + plantScale.shadowOffsetY, plantScale.shadowWidth, plantScale.shadowHeight);
+    graphics.fillStyle(plantScale.leafColor, 1);
+    graphics.fillEllipse(
+      center.x - plantScale.leafOffsetX,
+      center.y + plantScale.leafOffsetY,
+      plantScale.leafWidth,
+      plantScale.leafHeight
+    );
+    graphics.fillEllipse(
+      center.x + plantScale.leafOffsetX,
+      center.y + plantScale.leafOffsetY,
+      plantScale.leafWidth,
+      plantScale.leafHeight
+    );
+    graphics.fillStyle(plantScale.bodyColor, 1);
+    graphics.fillCircle(center.x, center.y - 2, plantScale.bodyRadius);
     graphics.lineStyle(3, 0xffef93, 0.9);
-    graphics.strokeCircle(center.x, center.y - 2, 27);
-    drawHpBar(graphics, center.x, center.y - 38, 58, plant.hp, plant.maxHp, 0xf3c84b);
+    graphics.strokeCircle(center.x, center.y - 2, plantScale.outlineRadius);
+    drawHpBar(graphics, center.x, center.y + plantScale.hpBarOffsetY, plantScale.hpBarWidth, plant.hp, plant.maxHp, plantScale.hpColor);
     return;
   }
 
   if (plant.type === "peashotter") {
-    graphics.fillStyle(0x4fae68, 1);
-    graphics.fillEllipse(center.x - 8, center.y + 10, 36, 28);
-    graphics.fillStyle(0x57c7d8, 1);
-    graphics.fillRoundedRect(center.x - 6, center.y - 15, 34, 18, 8);
+    const plantScale = RenderScaleV01.plants.peashotter;
+    graphics.fillEllipse(center.x, center.y + plantScale.shadowOffsetY, plantScale.shadowWidth, plantScale.shadowHeight);
+    graphics.fillStyle(plantScale.bodyColor, 1);
+    graphics.fillEllipse(
+      center.x + plantScale.bodyOffsetX,
+      center.y + plantScale.bodyOffsetY,
+      plantScale.bodyWidth,
+      plantScale.bodyHeight
+    );
+    graphics.fillStyle(plantScale.barrelColor, 1);
+    graphics.fillRoundedRect(
+      center.x + plantScale.barrelOffsetX,
+      center.y + plantScale.barrelOffsetY,
+      plantScale.barrelWidth,
+      plantScale.barrelHeight,
+      8
+    );
     graphics.fillStyle(0xd9f7f2, 1);
-    graphics.fillCircle(center.x + 26, center.y - 6, 7);
-    drawHpBar(graphics, center.x, center.y - 34, 58, plant.hp, plant.maxHp, 0x8de36c);
+    graphics.fillCircle(
+      center.x + plantScale.muzzleOffsetX,
+      center.y + plantScale.muzzleOffsetY,
+      plantScale.muzzleRadius
+    );
+    drawHpBar(graphics, center.x, center.y + plantScale.hpBarOffsetY, plantScale.hpBarWidth, plant.hp, plant.maxHp, plantScale.hpColor);
     return;
   }
 
-  graphics.fillStyle(0x8f6a3b, 1);
-  graphics.fillRoundedRect(center.x - 28, center.y - 24, 56, 50, 8);
-  graphics.lineStyle(3, 0x5c3a22, 0.9);
+  const plantScale = RenderScaleV01.plants.barkwall;
+  graphics.fillEllipse(center.x, center.y + plantScale.shadowOffsetY, plantScale.shadowWidth, plantScale.shadowHeight);
+  graphics.fillStyle(plantScale.bodyColor, 1);
+  graphics.fillRoundedRect(
+    center.x - plantScale.bodyWidth / 2,
+    center.y - plantScale.bodyHeight / 2 + 1,
+    plantScale.bodyWidth,
+    plantScale.bodyHeight,
+    8
+  );
+  graphics.lineStyle(3, plantScale.grooveColor, 0.9);
   graphics.lineBetween(center.x - 10, center.y - 20, center.x - 18, center.y + 20);
   graphics.lineBetween(center.x + 10, center.y - 22, center.x + 6, center.y + 22);
-  drawHpBar(graphics, center.x, center.y - 34, 62, plant.hp, plant.maxHp, 0xd7a96b);
+  drawHpBar(graphics, center.x, center.y + plantScale.hpBarOffsetY, plantScale.hpBarWidth, plant.hp, plant.maxHp, plantScale.hpColor);
 }
 
 function drawHpBar(
@@ -1594,10 +1739,11 @@ function drawHpBar(
   color: number
 ): void {
   const ratio = maxHp <= 0 ? 0 : Phaser.Math.Clamp(hp / maxHp, 0, 1);
-  graphics.fillStyle(0x101513, 0.9);
-  graphics.fillRoundedRect(x - width / 2, y, width, 5, 2);
+  const barScale = RenderScaleV01.hpBar;
+  graphics.fillStyle(barScale.backgroundColor, 0.9);
+  graphics.fillRoundedRect(x - width / 2, y, width, barScale.height, 2);
   graphics.fillStyle(color, 0.95);
-  graphics.fillRoundedRect(x - width / 2, y, Math.max(0, width * ratio), 5, 2);
+  graphics.fillRoundedRect(x - width / 2, y, Math.max(0, width * ratio), barScale.height, 2);
 }
 
 function phaseBannerLabel(event: MatchPhaseChangedEvent): string | undefined {
