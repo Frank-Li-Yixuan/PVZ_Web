@@ -37,7 +37,7 @@ const httpServer = http.createServer((request, response) => {
     ok: true,
     service: "sprout-and-steel-server",
     version: PROJECT_VERSION,
-    phase: "phase-10"
+    phase: "phase-11"
   };
 
   if (request.url === "/" || request.url === "/health") {
@@ -61,7 +61,7 @@ io.on("connection", (socket) => {
   console.log(`[server] socket connected: ${socket.id}`);
   socket.emit("server.ready", {
     version: PROJECT_VERSION,
-    message: "Phase 10 boss fight server is ready."
+    message: "Phase 11 result UI server is ready."
   });
 
   socket.on(C2S.ROOM_CREATE, (request: CreateRoomRequest, ack?: (payload: RoomAckPayload) => void) => {
@@ -338,7 +338,7 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 10 listening on http://${HOST}:${PORT}`);
+  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 11 listening on http://${HOST}:${PORT}`);
 });
 
 function broadcastRoomState(room: GameRoom): void {
@@ -361,6 +361,13 @@ function startMatchLoop(room: GameRoom): void {
     },
     onSnapshot: (snapshot) => {
       io.to(room.matchId).emit(S2C.STATE_SNAPSHOT, snapshot);
+    },
+    onMatchEnded: (payload) => {
+      io.to(room.matchId).emit(S2C.MATCH_ENDED, payload);
+      console.log(
+        `[match] ended ${room.matchId}: result=${payload.result}; clearTime=${payload.stats.clearTimeSeconds}s; baseHp=${payload.stats.baseHpRemaining}`
+      );
+      stopMatchLoop(room.matchId, `match ended ${payload.result}`);
     }
   });
 

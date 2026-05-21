@@ -58,6 +58,7 @@ describe("Phase 1 shared contracts", () => {
       ACTION_ACCEPTED: "action.accepted",
       ACTION_REJECTED: "action.rejected",
       FEEDBACK_EVENT: "event.feedback",
+      MATCH_ENDED: "match.ended",
       SERVER_PING: "server.ping"
     });
   });

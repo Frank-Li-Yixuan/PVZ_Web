@@ -10,8 +10,11 @@ import {
   type AimInputPayload,
   type EvolveRequestPayload,
   type GameStateSnapshot,
+  type MatchEndedPayload,
   type MatchId,
   type MatchPhaseChangedEvent,
+  type MatchResult,
+  type MatchResultStats,
   type MoveInputPayload,
   type BuyAmmoRequestPayload,
   type PlantRequestPayload,
@@ -37,6 +40,7 @@ export type GameLoopOptions = {
   getRoomState: () => RoomStatePayload;
   onSnapshot: (snapshot: GameStateSnapshot) => void;
   onPhaseChanged: (event: MatchPhaseChangedEvent) => void;
+  onMatchEnded?: (payload: MatchEndedPayload) => void;
   now?: () => number;
 };
 
@@ -83,6 +87,10 @@ export class GameLoop {
   private readonly weaponSystem = new WeaponSystem();
   private readonly evolutionSystem = new EvolutionSystem();
   private readonly pendingSnapshotEvents: FeedbackEvent[] = [];
+  private finalSnapshot: GameStateSnapshot | undefined;
+  private matchEndedPayload: MatchEndedPayload | undefined;
+  private totalEnemiesKilled = 0;
+  private bossDamageTotal = 0;
 
   constructor(private readonly options: GameLoopOptions) {
     this.stateMachine = new MatchStateMachine(options.matchId);
@@ -116,6 +124,10 @@ export class GameLoop {
   }
 
   getCurrentSnapshot(): GameStateSnapshot {
+    if (this.finalSnapshot) {
+      return this.finalSnapshot;
+    }
+
     return this.buildSnapshot(this.now());
   }
 
@@ -234,7 +246,7 @@ export class GameLoop {
         };
       }
 
-      this.pendingSnapshotEvents.push(result.feedback);
+      this.recordEvents(result.feedback);
       return { ok: true };
     }
 
@@ -243,6 +255,30 @@ export class GameLoop {
       if (!result.ok) {
         return result;
       }
+      return { ok: true };
+    }
+
+    if (payload.command === "forceVictory") {
+      const serverTimeMs = this.now();
+      const event = this.stateMachine.forceTerminalState("VICTORY", serverTimeMs);
+      this.options.onPhaseChanged(event);
+      this.recordEvents({
+        id: `event_victory_${this.serverSeq + 1}`,
+        eventType: "match.victory",
+        serverTimeMs,
+        data: {
+          reason: "debug_force_victory"
+        }
+      });
+      this.finalizeMatchIfTerminal(serverTimeMs);
+      return { ok: true };
+    }
+
+    if (payload.command === "forceDefeat") {
+      const serverTimeMs = this.now();
+      this.base.hp = 0;
+      this.forceDefeat(serverTimeMs);
+      this.finalizeMatchIfTerminal(serverTimeMs);
       return { ok: true };
     }
 
@@ -279,7 +315,7 @@ export class GameLoop {
 
     if (canMutateCombat(matchState)) {
       this.economySystem.update(this.tickDeltaSeconds);
-      this.pendingSnapshotEvents.push(
+      this.recordEvents(
         ...this.weaponSystem.update(this.tickDeltaSeconds, this.playersById.values(), serverTimeMs),
         ...this.plantSystem.update(this.tickDeltaSeconds, this.economySystem, serverTimeMs),
         ...this.plantCombatSystem.update(
@@ -307,7 +343,7 @@ export class GameLoop {
         this.base,
         serverTimeMs
       );
-      this.pendingSnapshotEvents.push(...enemyResult.events);
+      this.recordEvents(...enemyResult.events);
 
       if (this.stateMachine.getMatchState() === "BOSS_ACTIVE") {
         const bossResult = this.bossSystem.update({
@@ -320,7 +356,7 @@ export class GameLoop {
           players: this.playersById.values(),
           serverTimeMs
         });
-        this.pendingSnapshotEvents.push(...bossResult.events);
+        this.recordEvents(...bossResult.events);
 
         for (const spawn of bossResult.spawns) {
           const spawnResult = this.enemySystem.spawnEnemy({
@@ -330,7 +366,7 @@ export class GameLoop {
             debugSpawn: false
           });
           if (spawnResult.ok) {
-            this.pendingSnapshotEvents.push(spawnResult.feedback);
+            this.recordEvents(spawnResult.feedback);
           }
         }
       }
@@ -342,6 +378,10 @@ export class GameLoop {
         const victoryEvent = this.stateMachine.forceTerminalState("VICTORY", serverTimeMs);
         this.options.onPhaseChanged(victoryEvent);
       }
+    }
+
+    if (this.finalizeMatchIfTerminal(serverTimeMs)) {
+      return;
     }
 
     if (this.tickCount % this.snapshotEveryTicks === 0) {
@@ -401,7 +441,7 @@ export class GameLoop {
       this.options.onPhaseChanged(event);
     }
 
-    this.pendingSnapshotEvents.push(...waveResult.feedback);
+    this.recordEvents(...waveResult.feedback);
 
     for (const spawn of waveResult.spawns) {
       const spawnResult = this.enemySystem.spawnEnemy({
@@ -413,7 +453,7 @@ export class GameLoop {
         waveEventIndex: spawn.eventIndex
       });
       if (spawnResult.ok) {
-        this.pendingSnapshotEvents.push(spawnResult.feedback);
+        this.recordEvents(spawnResult.feedback);
       }
     }
   }
@@ -446,14 +486,14 @@ export class GameLoop {
 
     const event = this.stateMachine.transitionTo("BOSS_ACTIVE", serverTimeMs);
     this.options.onPhaseChanged(event);
-    this.pendingSnapshotEvents.push(spawn.feedback);
+    this.recordEvents(spawn.feedback);
     return { ok: true };
   }
 
   private forceDefeat(serverTimeMs: number): void {
     const defeatEvent = this.stateMachine.forceTerminalState("DEFEAT", serverTimeMs);
     this.options.onPhaseChanged(defeatEvent);
-    this.pendingSnapshotEvents.push({
+    this.recordEvents({
       id: `event_defeat_${this.serverSeq + 1}`,
       eventType: "match.defeat",
       serverTimeMs,
@@ -468,6 +508,80 @@ export class GameLoop {
       if (this.pendingSnapshotEvents[index]?.eventType === "match.victory") {
         this.pendingSnapshotEvents.splice(index, 1);
       }
+    }
+  }
+
+  private finalizeMatchIfTerminal(serverTimeMs: number): boolean {
+    if (this.matchEndedPayload) {
+      return true;
+    }
+
+    const result = this.stateMachine.getMatchState();
+    if (result !== "VICTORY" && result !== "DEFEAT") {
+      return false;
+    }
+
+    const finalSnapshot = this.buildSnapshot(serverTimeMs);
+    const payload: MatchEndedPayload = {
+      matchId: this.options.matchId,
+      serverTimeMs,
+      result,
+      stats: this.buildMatchResultStats(result),
+      finalSnapshot
+    };
+
+    this.finalSnapshot = finalSnapshot;
+    this.matchEndedPayload = payload;
+    this.options.onSnapshot(finalSnapshot);
+    this.options.onMatchEnded?.(payload);
+    this.stop();
+    return true;
+  }
+
+  private buildMatchResultStats(result: MatchResult): MatchResultStats {
+    const economy = this.economySystem.getSnapshot();
+    const enemies = this.enemySystem.getSnapshot();
+    const wave = this.waveSystem.getSnapshot(enemies.length);
+    const players = [...this.playersById.values()]
+      .sort((a, b) => a.slot - b.slot)
+      .map((player) => ({
+        playerId: player.playerId,
+        slot: player.slot,
+        name: player.name,
+        damageDealt: statNumber(player.stats.damageDealt),
+        enemiesKilled: statNumber(player.stats.enemiesKilled),
+        shotsFired: statNumber(player.stats.shotsFired),
+        shotsHit: statNumber(player.stats.shotsHit),
+        ammoPurchases: statNumber(player.stats.ammoPurchased),
+        sunSpentByActions: statNumber(player.stats.sunSpent),
+        plantsPlaced: statNumber(player.stats.plantsPlaced),
+        deaths: statNumber(player.stats.deaths),
+        evolutionPath: player.evolutionPath ?? null
+      }));
+
+    return {
+      clearTimeSeconds: this.stateMachine.getTime().elapsedMatchSeconds,
+      result,
+      finalWave: wave.currentWaveIndex,
+      baseHpRemaining: this.base.hp,
+      totalSunEarned: economy.totalSunEarned,
+      totalSunSpent: economy.totalSunSpent,
+      totalPlantsPlaced: players.reduce((sum, player) => sum + player.plantsPlaced, 0),
+      totalEnemiesKilled: this.totalEnemiesKilled,
+      bossDamageTotal: roundStat(this.bossDamageTotal),
+      players
+    };
+  }
+
+  private recordEvents(...events: FeedbackEvent[]): void {
+    for (const event of events) {
+      if (event.eventType === "enemy.killed") {
+        this.totalEnemiesKilled += 1;
+      }
+      if (event.eventType === "enemy.hit" && event.data?.target === "boss" && typeof event.data.damage === "number") {
+        this.bossDamageTotal += event.data.damage;
+      }
+      this.pendingSnapshotEvents.push(event);
     }
   }
 
@@ -616,4 +730,16 @@ function roundPosition(value: number): number {
 
 function roundDirection(value: number): number {
   return Number(value.toFixed(4));
+}
+
+function statNumber(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return roundStat(value);
+}
+
+function roundStat(value: number): number {
+  return Number(value.toFixed(3));
 }

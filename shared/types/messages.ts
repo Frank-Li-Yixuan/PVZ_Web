@@ -119,7 +119,9 @@ export type DebugCommandPayload =
   | { command: "addSun"; amount: number }
   | { command: "spawnEnemy"; enemyType: EnemyType; laneIndex: number }
   | { command: "startBoss" }
-  | { command: "killAllEnemies" };
+  | { command: "killAllEnemies" }
+  | { command: "forceVictory" }
+  | { command: "forceDefeat" };
 
 export type ReconnectRequest = {
   matchId: MatchId;

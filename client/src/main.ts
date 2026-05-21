@@ -24,6 +24,7 @@ import {
   type EvolveRequestPayload,
   type GameStateSnapshot,
   type JoinRoomRequest,
+  type MatchEndedPayload,
   type MatchPhaseChangedEvent,
   type MoveInputPayload,
   type BuyAmmoRequestPayload,
@@ -111,7 +112,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 306, `Phase 10 boss fight build ${PROJECT_VERSION}`, {
+      .text(width / 2, 306, `Phase 11 results UI build ${PROJECT_VERSION}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: "#f3c84b"
@@ -822,6 +823,7 @@ type LobbyClientState = {
 type MatchClientState = {
   latestSnapshot: GameStateSnapshot | undefined;
   latestPhaseChanged: MatchPhaseChangedEvent | undefined;
+  matchEnded: MatchEndedPayload | undefined;
   snapshotReceivedAtMs: number[];
   snapshotRateHz: number;
 };
@@ -837,6 +839,7 @@ const lobbyState: LobbyClientState = {
 const matchState: MatchClientState = {
   latestSnapshot: undefined,
   latestPhaseChanged: undefined,
+  matchEnded: undefined,
   snapshotReceivedAtMs: [],
   snapshotRateHz: 0
 };
@@ -893,6 +896,14 @@ socket.on(S2C.STATE_SNAPSHOT, (payload: GameStateSnapshot) => {
   if (!wasEvolutionUnlocked && payload.wave.evolutionUnlocked) {
     showActionToast("Evolution unlocked.");
   }
+  renderMatchDebug();
+});
+
+socket.on(S2C.MATCH_ENDED, (payload: MatchEndedPayload) => {
+  matchState.matchEnded = payload;
+  matchState.latestSnapshot = payload.finalSnapshot;
+  battleScene?.pushSnapshot(payload.finalSnapshot);
+  showMatchResult(payload);
   renderMatchDebug();
 });
 
@@ -971,6 +982,10 @@ socket.on(S2C.FEEDBACK_EVENT, (payload: FeedbackEvent) => {
   }
   if (payload.eventType === "match.victory") {
     showActionToast("Victory.");
+    return;
+  }
+  if (payload.eventType === "match.defeat") {
+    showActionToast("Defeat.");
   }
 });
 
@@ -1040,6 +1055,8 @@ lobby.spawnShamblerButton.addEventListener("click", () => sendSpawnEnemyDebug("s
 lobby.spawnRunnerButton.addEventListener("click", () => sendSpawnEnemyDebug("runner"));
 lobby.spawnBruteButton.addEventListener("click", () => sendSpawnEnemyDebug("brute"));
 lobby.startBossButton.addEventListener("click", () => sendDebugCommand({ command: "startBoss" }));
+lobby.forceVictoryButton.addEventListener("click", () => sendDebugCommand({ command: "forceVictory" }));
+lobby.forceDefeatButton.addEventListener("click", () => sendDebugCommand({ command: "forceDefeat" }));
 lobby.evolveFirepowerButton.addEventListener("click", () => sendEvolutionPath("firepower"));
 lobby.evolveControlButton.addEventListener("click", () => sendEvolutionPath("control"));
 lobby.evolveSupportButton.addEventListener("click", () => sendEvolutionPath("support"));
@@ -1129,6 +1146,14 @@ sendDebugCommand = (payload: DebugCommandPayload) => {
     }
     if (payload.command === "startBoss") {
       showActionToast("Boss started.");
+      return;
+    }
+    if (payload.command === "forceVictory") {
+      showActionToast("Victory forced.");
+      return;
+    }
+    if (payload.command === "forceDefeat") {
+      showActionToast("Defeat forced.");
     }
   });
 };
@@ -1226,6 +1251,8 @@ function renderMatchDebug(): void {
   lobby.prepTimer.textContent =
     snapshot?.matchState === "WAVE_PREP" && remainingSeconds !== undefined ? `${remainingSeconds.toFixed(1)}s` : "-";
   lobby.baseHp.textContent = snapshot ? `${snapshot.base.hp}/${snapshot.base.maxHp}` : "-";
+  setMeter(lobby.baseHpMeter, snapshot?.base.hp, snapshot?.base.maxHp);
+  lobby.playerHp.textContent = localPlayer ? `${localPlayer.hp}/${localPlayer.maxHp}` : "-";
   lobby.evolutionUnlocked.textContent = evolutionUnlocked ? "Unlocked" : "Locked";
   lobby.evolutionPath.textContent = localPlayer?.evolutionPath ?? (hasEvolved ? "Selected" : "None");
   lobby.evolutionCost.textContent = String(evolutionCost);
@@ -1277,11 +1304,14 @@ function renderMatchDebug(): void {
       ? `${localPlayer.ammoPurchaseCooldownRemainingSeconds.toFixed(1)}s`
       : "Ready";
   lobby.bossHp.textContent = snapshot?.boss ? `${snapshot.boss.hp}/${snapshot.boss.maxHp}` : "-";
+  setMeter(lobby.bossHpMeter, snapshot?.boss?.hp, snapshot?.boss?.maxHp);
   lobby.bossPhase.textContent = snapshot?.boss ? `Phase ${snapshot.boss.phase}` : "-";
   lobby.bossSkill.textContent = snapshot?.boss?.currentSkill ?? "-";
   lobby.bossInterrupt.textContent = snapshot?.boss
     ? `${snapshot.boss.interruptProgress}/${snapshot.boss.interruptRequired}`
     : "-";
+  setMeter(lobby.bossInterruptMeter, snapshot?.boss?.interruptProgress, snapshot?.boss?.interruptRequired);
+  lobby.bossChargeWarning.hidden = !(snapshot?.boss?.charging || snapshot?.boss?.currentSkill === "charge_windup");
   lobby.selectedPlant.textContent = PLANT_LABELS[selectedPlantType];
   lobby.hoverCell.textContent = currentHoverCellLabel;
 }
@@ -1310,8 +1340,73 @@ function recordSnapshotReceived(): void {
 function resetMatchDebug(): void {
   matchState.latestSnapshot = undefined;
   matchState.latestPhaseChanged = undefined;
+  matchState.matchEnded = undefined;
   matchState.snapshotReceivedAtMs = [];
   matchState.snapshotRateHz = 0;
+  lobby.resultScreen.hidden = true;
+}
+
+function showMatchResult(payload: MatchEndedPayload): void {
+  const stats = payload.stats;
+  lobby.resultScreen.hidden = false;
+  lobby.resultScreen.dataset.result = payload.result;
+  lobby.resultTitle.textContent = payload.result === "VICTORY" ? "Victory" : "Defeat";
+  lobby.resultStats.replaceChildren(
+    resultStat("Time", formatSeconds(stats.clearTimeSeconds)),
+    resultStat("Final wave", String(stats.finalWave)),
+    resultStat("Base HP", `${stats.baseHpRemaining}/${payload.finalSnapshot.base.maxHp}`),
+    resultStat("Sun earned", String(stats.totalSunEarned)),
+    resultStat("Sun spent", String(stats.totalSunSpent)),
+    resultStat("Plants", String(stats.totalPlantsPlaced)),
+    resultStat("Enemy KOs", String(stats.totalEnemiesKilled)),
+    resultStat("Boss damage", String(stats.bossDamageTotal))
+  );
+  lobby.resultPlayers.replaceChildren(
+    ...stats.players.map((player) => {
+      const card = document.createElement("article");
+      card.className = "result-player";
+      const title = document.createElement("h3");
+      title.textContent = `P${player.slot + 1} ${player.name}`;
+      const rows = document.createElement("dl");
+      rows.className = "result-player-grid";
+      rows.replaceChildren(
+        resultStat("Damage", String(player.damageDealt)),
+        resultStat("Kills", String(player.enemiesKilled)),
+        resultStat("Shots", `${player.shotsHit}/${player.shotsFired}`),
+        resultStat("Ammo buys", String(player.ammoPurchases)),
+        resultStat("Sun spent", String(player.sunSpentByActions)),
+        resultStat("Plants", String(player.plantsPlaced)),
+        resultStat("Deaths", String(player.deaths)),
+        resultStat("Evolution", player.evolutionPath ?? "None")
+      );
+      card.replaceChildren(title, rows);
+      return card;
+    })
+  );
+}
+
+function resultStat(label: string, value: string): HTMLDivElement {
+  const row = document.createElement("div");
+  const term = document.createElement("dt");
+  const description = document.createElement("dd");
+  term.textContent = label;
+  description.textContent = value;
+  row.replaceChildren(term, description);
+  return row;
+}
+
+function setMeter(element: HTMLElement, current: number | undefined, max: number | undefined): void {
+  if (current === undefined || max === undefined || max <= 0) {
+    element.style.width = "0%";
+    return;
+  }
+
+  const ratio = Math.max(0, Math.min(1, current / max));
+  element.style.width = `${(ratio * 100).toFixed(1)}%`;
+}
+
+function formatSeconds(seconds: number): string {
+  return `${seconds.toFixed(1)}s`;
 }
 
 function createClientRequestId(): string {
@@ -1586,6 +1681,8 @@ function createLobbyUi(): {
   currentWave: HTMLSpanElement;
   prepTimer: HTMLSpanElement;
   baseHp: HTMLSpanElement;
+  baseHpMeter: HTMLSpanElement;
+  playerHp: HTMLSpanElement;
   evolutionUnlocked: HTMLSpanElement;
   evolutionPath: HTMLSpanElement;
   evolutionPanel: HTMLElement;
@@ -1612,15 +1709,24 @@ function createLobbyUi(): {
   reloadState: HTMLSpanElement;
   ammoCooldown: HTMLSpanElement;
   bossHp: HTMLSpanElement;
+  bossHpMeter: HTMLSpanElement;
   bossPhase: HTMLSpanElement;
   bossSkill: HTMLSpanElement;
   bossInterrupt: HTMLSpanElement;
+  bossInterruptMeter: HTMLSpanElement;
+  bossChargeWarning: HTMLDivElement;
   debugLaneInput: HTMLInputElement;
   spawnShamblerButton: HTMLButtonElement;
   spawnRunnerButton: HTMLButtonElement;
   spawnBruteButton: HTMLButtonElement;
   startBossButton: HTMLButtonElement;
+  forceVictoryButton: HTMLButtonElement;
+  forceDefeatButton: HTMLButtonElement;
   actionToast: HTMLDivElement;
+  resultScreen: HTMLElement;
+  resultTitle: HTMLHeadingElement;
+  resultStats: HTMLDivElement;
+  resultPlayers: HTMLDivElement;
 } {
   const app = document.querySelector<HTMLDivElement>("#app");
   if (!app) {
@@ -1664,7 +1770,8 @@ function createLobbyUi(): {
         <div><dt>Timer</dt><dd data-testid="phase-timer">-</dd></div>
         <div><dt>Wave</dt><dd data-testid="current-wave">-</dd></div>
         <div><dt>Prep</dt><dd data-testid="prep-timer">-</dd></div>
-        <div><dt>Base HP</dt><dd data-testid="base-hp">-</dd></div>
+        <div><dt>Base HP</dt><dd><span data-testid="base-hp">-</span><span class="meter"><span data-testid="base-hp-meter"></span></span></dd></div>
+        <div><dt>Player HP</dt><dd data-testid="player-hp">-</dd></div>
         <div><dt>Evolution</dt><dd data-testid="evolution-unlocked">Locked</dd></div>
         <div><dt>Path</dt><dd data-testid="evolution-path">None</dd></div>
       </dl>
@@ -1689,11 +1796,12 @@ function createLobbyUi(): {
     <section class="boss-hud" aria-label="Boss">
       <h3>Boss</h3>
       <dl class="room-meta">
-        <div><dt>HP</dt><dd data-testid="boss-hp">-</dd></div>
+        <div><dt>HP</dt><dd><span data-testid="boss-hp">-</span><span class="meter boss-meter"><span data-testid="boss-hp-meter"></span></span></dd></div>
         <div><dt>Phase</dt><dd data-testid="boss-phase">-</dd></div>
         <div><dt>Skill</dt><dd data-testid="boss-skill">-</dd></div>
-        <div><dt>Interrupt</dt><dd data-testid="boss-interrupt">-</dd></div>
+        <div><dt>Interrupt</dt><dd><span data-testid="boss-interrupt">-</span><span class="meter interrupt-meter"><span data-testid="boss-interrupt-meter"></span></span></dd></div>
       </dl>
+      <div class="boss-charge-warning" data-testid="boss-charge-warning" hidden>Charge warning</div>
     </section>
     <section class="evolution-hud" data-testid="evolution-panel" aria-label="Evolution paths" hidden>
       <h3>Evolution</h3>
@@ -1705,6 +1813,18 @@ function createLobbyUi(): {
         <button type="button" data-testid="evolve-firepower">Firepower</button>
         <button type="button" data-testid="evolve-control">Control</button>
         <button type="button" data-testid="evolve-support">Support</button>
+      </div>
+    </section>
+    <section class="controls-help" aria-label="Controls">
+      <h3>Controls</h3>
+      <div class="controls-grid">
+        <kbd>WASD</kbd><span>Move</span>
+        <kbd>Mouse</kbd><span>Aim / shoot</span>
+        <kbd>E</kbd><span>Plant selected</span>
+        <kbd>1 2 3</kbd><span>Select plant</span>
+        <kbd>R</kbd><span>Reload</span>
+        <kbd>Q</kbd><span>Buy ammo</span>
+        <kbd>F</kbd><span>Evolution</span>
       </div>
     </section>
     <section class="debug-overlay" aria-label="Debug overlay">
@@ -1732,9 +1852,21 @@ function createLobbyUi(): {
           <button type="button" data-testid="spawn-brute">Brute</button>
           <button type="button" data-testid="start-boss">Start Boss</button>
         </div>
+        <div class="button-row">
+          <button type="button" data-testid="force-victory">Force Victory</button>
+          <button type="button" data-testid="force-defeat">Force Defeat</button>
+        </div>
       </div>
     </section>
     <div class="action-toast" data-testid="action-toast"></div>
+    <section class="result-screen" data-testid="result-screen" hidden>
+      <div class="result-dialog">
+        <p class="result-kicker">Match Result</p>
+        <h2 data-testid="result-title">-</h2>
+        <div class="result-stats" data-testid="result-stats"></div>
+        <div class="result-players" data-testid="result-players"></div>
+      </div>
+    </section>
     <div class="lobby-error" data-testid="lobby-error"></div>
   `;
   app.append(panel);
@@ -1757,6 +1889,8 @@ function createLobbyUi(): {
     currentWave: requiredElement(panel, "[data-testid='current-wave']"),
     prepTimer: requiredElement(panel, "[data-testid='prep-timer']"),
     baseHp: requiredElement(panel, "[data-testid='base-hp']"),
+    baseHpMeter: requiredElement(panel, "[data-testid='base-hp-meter']"),
+    playerHp: requiredElement(panel, "[data-testid='player-hp']"),
     evolutionUnlocked: requiredElement(panel, "[data-testid='evolution-unlocked']"),
     evolutionPath: requiredElement(panel, "[data-testid='evolution-path']"),
     evolutionPanel: requiredElement(panel, "[data-testid='evolution-panel']"),
@@ -1783,15 +1917,24 @@ function createLobbyUi(): {
     reloadState: requiredElement(panel, "[data-testid='reload-state']"),
     ammoCooldown: requiredElement(panel, "[data-testid='ammo-cooldown']"),
     bossHp: requiredElement(panel, "[data-testid='boss-hp']"),
+    bossHpMeter: requiredElement(panel, "[data-testid='boss-hp-meter']"),
     bossPhase: requiredElement(panel, "[data-testid='boss-phase']"),
     bossSkill: requiredElement(panel, "[data-testid='boss-skill']"),
     bossInterrupt: requiredElement(panel, "[data-testid='boss-interrupt']"),
+    bossInterruptMeter: requiredElement(panel, "[data-testid='boss-interrupt-meter']"),
+    bossChargeWarning: requiredElement(panel, "[data-testid='boss-charge-warning']"),
     debugLaneInput: requiredElement(panel, "[data-testid='debug-lane']"),
     spawnShamblerButton: requiredElement(panel, "[data-testid='spawn-shambler']"),
     spawnRunnerButton: requiredElement(panel, "[data-testid='spawn-runner']"),
     spawnBruteButton: requiredElement(panel, "[data-testid='spawn-brute']"),
     startBossButton: requiredElement(panel, "[data-testid='start-boss']"),
-    actionToast: requiredElement(panel, "[data-testid='action-toast']")
+    forceVictoryButton: requiredElement(panel, "[data-testid='force-victory']"),
+    forceDefeatButton: requiredElement(panel, "[data-testid='force-defeat']"),
+    actionToast: requiredElement(panel, "[data-testid='action-toast']"),
+    resultScreen: requiredElement(panel, "[data-testid='result-screen']"),
+    resultTitle: requiredElement(panel, "[data-testid='result-title']"),
+    resultStats: requiredElement(panel, "[data-testid='result-stats']"),
+    resultPlayers: requiredElement(panel, "[data-testid='result-players']")
   };
 }
 
