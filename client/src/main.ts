@@ -106,7 +106,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 306, `Phase 7 hero pistol build ${PROJECT_VERSION}`, {
+      .text(width / 2, 306, `Phase 8 formal waves build ${PROJECT_VERSION}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: "#f3c84b"
@@ -167,6 +167,7 @@ class BattleScene extends Phaser.Scene {
   private hoverCell: ReturnType<typeof getPlantCellAtWorldPoint>;
   private latestSnapshot: GameStateSnapshot | undefined;
   private baseHpText: Phaser.GameObjects.Text | undefined;
+  private phaseBannerText: Phaser.GameObjects.Text | undefined;
   private lastInputSentAtMs = 0;
   private currentMoveDir: MoveInputPayload = { dirX: 0, dirY: 0 };
 
@@ -208,6 +209,18 @@ class BattleScene extends Phaser.Scene {
         color: "#f7f2df"
       })
       .setDepth(20);
+
+    const width = MapConfigV01.worldWidthPx;
+    this.phaseBannerText = this.add
+      .text(width / 2, 84, "", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "28px",
+        color: "#f7f2df",
+        backgroundColor: "#101513"
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(45);
   }
 
   update(_time: number, deltaMs: number): void {
@@ -257,6 +270,25 @@ class BattleScene extends Phaser.Scene {
       duration: label.durationMs,
       ease: "Sine.easeOut",
       onComplete: () => text.destroy()
+    });
+  }
+
+  showPhaseBanner(event: MatchPhaseChangedEvent): void {
+    const banner = this.phaseBannerText;
+    const text = phaseBannerLabel(event);
+    if (!banner || !text) {
+      return;
+    }
+
+    banner.setText(text);
+    banner.setAlpha(1);
+    this.tweens.killTweensOf(banner);
+    this.tweens.add({
+      targets: banner,
+      alpha: 0,
+      duration: 1300,
+      delay: 750,
+      ease: "Sine.easeOut"
     });
   }
 
@@ -796,13 +828,22 @@ socket.on(S2C.ROOM_STATE, (payload: RoomStatePayload) => {
 
 socket.on(S2C.MATCH_PHASE_CHANGED, (payload: MatchPhaseChangedEvent) => {
   matchState.latestPhaseChanged = payload;
+  battleScene?.showPhaseBanner(payload);
+  const label = phaseBannerLabel(payload);
+  if (label) {
+    showActionToast(label);
+  }
   renderMatchDebug();
 });
 
 socket.on(S2C.STATE_SNAPSHOT, (payload: GameStateSnapshot) => {
+  const wasEvolutionUnlocked = matchState.latestSnapshot?.wave.evolutionUnlocked ?? false;
   matchState.latestSnapshot = payload;
   battleScene?.pushSnapshot(payload);
   recordSnapshotReceived();
+  if (!wasEvolutionUnlocked && payload.wave.evolutionUnlocked) {
+    showActionToast("Evolution unlocked.");
+  }
   renderMatchDebug();
 });
 
@@ -1056,14 +1097,24 @@ function renderMatchDebug(): void {
   const displayedMatchState =
     snapshot?.matchState ?? matchState.latestPhaseChanged?.nextState ?? lobbyState.room?.roomState ?? "-";
   const remainingSeconds = snapshot?.time.stateRemainingSeconds;
+  const wave = snapshot?.wave;
 
   lobby.matchState.textContent = displayedMatchState;
   lobby.phaseTimer.textContent = remainingSeconds === undefined ? "-" : `${remainingSeconds.toFixed(1)}s`;
+  lobby.currentWave.textContent = wave ? `${wave.currentWaveIndex}/${wave.totalWaves}` : "-";
+  lobby.prepTimer.textContent =
+    snapshot?.matchState === "WAVE_PREP" && remainingSeconds !== undefined ? `${remainingSeconds.toFixed(1)}s` : "-";
   lobby.baseHp.textContent = snapshot ? `${snapshot.base.hp}/${snapshot.base.maxHp}` : "-";
+  lobby.evolutionUnlocked.textContent = wave?.evolutionUnlocked ? "Unlocked" : "Locked";
   lobby.debugMatchId.textContent = snapshot?.matchId ?? lobbyState.matchId ?? "-";
   lobby.debugPlayerId.textContent = lobbyState.playerId ?? "-";
   lobby.debugSlot.textContent = lobbyState.playerSlot === undefined ? "-" : String(lobbyState.playerSlot);
   lobby.debugMatchState.textContent = displayedMatchState;
+  lobby.debugWave.textContent = wave
+    ? `W${wave.currentWaveIndex}/${wave.totalWaves} spawn ${wave.spawnedInWave} remaining ${wave.enemiesRemainingInWave} done ${String(
+        wave.waveSpawnComplete
+      )}`
+    : "-";
   lobby.debugServerSeq.textContent = snapshot?.serverSeq === undefined ? "-" : String(snapshot.serverSeq);
   lobby.debugSnapshotRate.textContent = `${matchState.snapshotRateHz.toFixed(1)} Hz`;
 
@@ -1222,6 +1273,28 @@ function drawHpBar(
   graphics.fillRoundedRect(x - width / 2, y, Math.max(0, width * ratio), 5, 2);
 }
 
+function phaseBannerLabel(event: MatchPhaseChangedEvent): string | undefined {
+  if (event.nextState === "WAVE_PREP") {
+    return `Wave ${event.waveIndex ?? "-"} Prep`;
+  }
+  if (event.nextState === "WAVE_ACTIVE") {
+    return `Wave ${event.waveIndex ?? "-"} Start`;
+  }
+  if (event.nextState === "WAVE_CLEAR") {
+    return `Wave ${event.waveIndex ?? "-"} Clear`;
+  }
+  if (event.nextState === "BOSS_PREP") {
+    return "Boss Prep";
+  }
+  if (event.nextState === "DEFEAT") {
+    return "Defeat";
+  }
+  if (event.nextState === "VICTORY") {
+    return "Victory";
+  }
+  return undefined;
+}
+
 function feedbackLabel(event: FeedbackEvent): { text: string; color: string; size: string; durationMs: number } | undefined {
   if (event.eventType === "hero.shoot") {
     return { text: "bang", color: "#fff1a6", size: "12px", durationMs: 220 };
@@ -1234,6 +1307,10 @@ function feedbackLabel(event: FeedbackEvent): { text: string; color: string; siz
   }
   if (event.eventType === "hero.reloadComplete") {
     return { text: "ready", color: "#8de36c", size: "12px", durationMs: 420 };
+  }
+  if (event.eventType === "wave.started") {
+    const waveIndex = typeof event.data?.waveIndex === "number" ? event.data.waveIndex : "-";
+    return { text: `Wave ${waveIndex}`, color: "#f3c84b", size: "18px", durationMs: 700 };
   }
   if (event.eventType === "enemy.spawned") {
     return { text: "spawn", color: "#ffbfcc", size: "12px", durationMs: 360 };
@@ -1280,11 +1357,15 @@ function createLobbyUi(): {
   players: HTMLUListElement;
   matchState: HTMLSpanElement;
   phaseTimer: HTMLSpanElement;
+  currentWave: HTMLSpanElement;
+  prepTimer: HTMLSpanElement;
   baseHp: HTMLSpanElement;
+  evolutionUnlocked: HTMLSpanElement;
   debugMatchId: HTMLSpanElement;
   debugPlayerId: HTMLSpanElement;
   debugSlot: HTMLSpanElement;
   debugMatchState: HTMLSpanElement;
+  debugWave: HTMLSpanElement;
   debugServerSeq: HTMLSpanElement;
   debugSnapshotRate: HTMLSpanElement;
   debugPosition: HTMLSpanElement;
@@ -1343,7 +1424,10 @@ function createLobbyUi(): {
       <dl class="room-meta">
         <div><dt>State</dt><dd data-testid="match-state">-</dd></div>
         <div><dt>Timer</dt><dd data-testid="phase-timer">-</dd></div>
+        <div><dt>Wave</dt><dd data-testid="current-wave">-</dd></div>
+        <div><dt>Prep</dt><dd data-testid="prep-timer">-</dd></div>
         <div><dt>Base HP</dt><dd data-testid="base-hp">-</dd></div>
+        <div><dt>Evolution</dt><dd data-testid="evolution-unlocked">Locked</dd></div>
       </dl>
     </section>
     <section class="plant-hud" aria-label="Planting">
@@ -1370,6 +1454,7 @@ function createLobbyUi(): {
         <div><dt>playerId</dt><dd data-testid="debug-player-id">-</dd></div>
         <div><dt>slot</dt><dd data-testid="debug-slot">-</dd></div>
         <div><dt>matchState</dt><dd data-testid="debug-match-state">-</dd></div>
+        <div><dt>wave</dt><dd data-testid="debug-wave">-</dd></div>
         <div><dt>serverSeq</dt><dd data-testid="debug-server-seq">-</dd></div>
         <div><dt>snapshot</dt><dd data-testid="debug-snapshot-rate">0.0 Hz</dd></div>
         <div><dt>position</dt><dd data-testid="debug-position">-</dd></div>
@@ -1408,11 +1493,15 @@ function createLobbyUi(): {
     players: requiredElement(panel, "[data-testid='player-list']"),
     matchState: requiredElement(panel, "[data-testid='match-state']"),
     phaseTimer: requiredElement(panel, "[data-testid='phase-timer']"),
+    currentWave: requiredElement(panel, "[data-testid='current-wave']"),
+    prepTimer: requiredElement(panel, "[data-testid='prep-timer']"),
     baseHp: requiredElement(panel, "[data-testid='base-hp']"),
+    evolutionUnlocked: requiredElement(panel, "[data-testid='evolution-unlocked']"),
     debugMatchId: requiredElement(panel, "[data-testid='debug-match-id']"),
     debugPlayerId: requiredElement(panel, "[data-testid='debug-player-id']"),
     debugSlot: requiredElement(panel, "[data-testid='debug-slot']"),
     debugMatchState: requiredElement(panel, "[data-testid='debug-match-state']"),
+    debugWave: requiredElement(panel, "[data-testid='debug-wave']"),
     debugServerSeq: requiredElement(panel, "[data-testid='debug-server-seq']"),
     debugSnapshotRate: requiredElement(panel, "[data-testid='debug-snapshot-rate']"),
     debugPosition: requiredElement(panel, "[data-testid='debug-position']"),

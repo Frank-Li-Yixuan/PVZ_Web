@@ -140,6 +140,8 @@ describe("Phase 1 shared contracts", () => {
         totalWaves: 5,
         spawnedInWave: 0,
         remainingInWave: 6,
+        waveSpawnComplete: false,
+        enemiesRemainingInWave: 6,
         evolutionUnlocked: false
       },
       events: [feedback]

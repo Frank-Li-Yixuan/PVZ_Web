@@ -60,7 +60,7 @@ io.on("connection", (socket) => {
   console.log(`[server] socket connected: ${socket.id}`);
   socket.emit("server.ready", {
     version: PROJECT_VERSION,
-    message: "Phase 7 combat and weapon server is ready."
+    message: "Phase 8 formal wave server is ready."
   });
 
   socket.on(C2S.ROOM_CREATE, (request: CreateRoomRequest, ack?: (payload: RoomAckPayload) => void) => {
@@ -311,7 +311,7 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 7 listening on http://${HOST}:${PORT}`);
+  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 8 listening on http://${HOST}:${PORT}`);
 });
 
 function broadcastRoomState(room: GameRoom): void {

@@ -1,7 +1,6 @@
 import {
   CombatNumbersV01,
   NetworkTimingV01,
-  WavesV01,
   clampPointToMapBounds,
   getPlayerSpawnPosition,
   normalizeVector,
@@ -27,6 +26,7 @@ import { EnemySystem } from "../systems/EnemySystem";
 import { PlantCombatSystem } from "../systems/PlantCombatSystem";
 import { PlantSystem, type PlantActionResult } from "../systems/PlantSystem";
 import { ProjectileSystem } from "../systems/ProjectileSystem";
+import { WaveSystem } from "../systems/WaveSystem";
 import { WeaponSystem, type WeaponActionResult } from "../systems/WeaponSystem";
 
 export type GameLoopOptions = {
@@ -75,6 +75,7 @@ export class GameLoop {
   private readonly enemySystem = new EnemySystem();
   private readonly projectileSystem = new ProjectileSystem();
   private readonly plantCombatSystem = new PlantCombatSystem();
+  private readonly waveSystem = new WaveSystem();
   private readonly weaponSystem = new WeaponSystem();
   private readonly pendingSnapshotEvents: FeedbackEvent[] = [];
 
@@ -203,7 +204,8 @@ export class GameLoop {
       const result = this.enemySystem.spawnEnemy({
         enemyType: payload.enemyType,
         laneIndex: payload.laneIndex,
-        serverTimeMs: this.now()
+        serverTimeMs: this.now(),
+        debugSpawn: true
       });
 
       if (!result.ok) {
@@ -228,15 +230,23 @@ export class GameLoop {
     const serverTimeMs = this.now();
     this.syncPlayers(this.options.getRoomState());
     const phaseEvents = this.stateMachine.update(this.tickDeltaSeconds, serverTimeMs);
+    const enteredWavePrepFromCountdown = phaseEvents.some(
+      (event) => event.previousState === "COUNTDOWN" && event.nextState === "WAVE_PREP"
+    );
 
     for (const event of phaseEvents) {
       this.options.onPhaseChanged(event);
     }
 
-    const matchState = this.stateMachine.getMatchState();
+    let matchState = this.stateMachine.getMatchState();
 
     if (canUpdatePlayerMovement(matchState)) {
       this.updatePlayerMovement(this.tickDeltaSeconds);
+    }
+
+    if (canMutateCombat(matchState) && !enteredWavePrepFromCountdown) {
+      this.updateWaves(serverTimeMs);
+      matchState = this.stateMachine.getMatchState();
     }
 
     if (canMutateCombat(matchState)) {
@@ -288,10 +298,10 @@ export class GameLoop {
 
   private buildSnapshot(serverTimeMs: number): GameStateSnapshot {
     const room = this.options.getRoomState();
-    const firstWave = WavesV01[0];
 
     this.syncPlayers(room);
     this.serverSeq += 1;
+    const enemies = this.enemySystem.getSnapshot();
 
     const snapshot: GameStateSnapshot = {
       matchId: this.options.matchId,
@@ -306,15 +316,9 @@ export class GameLoop {
         .sort((a, b) => a.slot - b.slot)
         .map((player) => toSnapshotPlayer(player)),
       plants: this.plantSystem.getSnapshot(),
-      enemies: this.enemySystem.getSnapshot(),
+      enemies,
       bullets: this.projectileSystem.getSnapshot(),
-      wave: {
-        currentWaveIndex: 1,
-        totalWaves: WavesV01.length,
-        spawnedInWave: 0,
-        remainingInWave: firstWave?.events.length ?? 0,
-        evolutionUnlocked: false
-      },
+      wave: this.waveSystem.getSnapshot(enemies.length),
       events: this.pendingSnapshotEvents.splice(0)
     };
 
@@ -323,6 +327,37 @@ export class GameLoop {
 
   private now(): number {
     return this.options.now?.() ?? Date.now();
+  }
+
+  private updateWaves(serverTimeMs: number): void {
+    const waveResult = this.waveSystem.update({
+      matchState: this.stateMachine.getMatchState(),
+      deltaSeconds: this.tickDeltaSeconds,
+      activeEnemyCount: this.enemySystem.getSnapshot().length,
+      baseHp: this.base.hp,
+      serverTimeMs
+    });
+
+    for (const transition of waveResult.transitions) {
+      const event = this.stateMachine.transitionTo(transition.nextState, serverTimeMs, transition.waveIndex);
+      this.options.onPhaseChanged(event);
+    }
+
+    this.pendingSnapshotEvents.push(...waveResult.feedback);
+
+    for (const spawn of waveResult.spawns) {
+      const spawnResult = this.enemySystem.spawnEnemy({
+        enemyType: spawn.enemyType,
+        laneIndex: spawn.laneIndex,
+        serverTimeMs,
+        debugSpawn: false,
+        waveIndex: spawn.waveIndex,
+        waveEventIndex: spawn.eventIndex
+      });
+      if (spawnResult.ok) {
+        this.pendingSnapshotEvents.push(spawnResult.feedback);
+      }
+    }
   }
 
   private syncPlayers(room: RoomStatePayload): void {

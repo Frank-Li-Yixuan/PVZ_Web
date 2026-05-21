@@ -25,6 +25,9 @@ export type SpawnEnemyInput = {
   enemyType: EnemyType;
   laneIndex: number;
   serverTimeMs: number;
+  debugSpawn?: boolean;
+  waveIndex?: number;
+  waveEventIndex?: number;
 };
 
 export type SpawnEnemyResult =
@@ -92,7 +95,9 @@ export class EnemySystem {
         data: {
           enemyType: input.enemyType,
           laneIndex: input.laneIndex,
-          debugSpawn: true
+          debugSpawn: input.debugSpawn ?? false,
+          waveIndex: input.waveIndex,
+          waveEventIndex: input.waveEventIndex
         }
       }
     };

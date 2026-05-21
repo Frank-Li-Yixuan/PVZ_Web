@@ -26,6 +26,8 @@ export type WaveState = {
   totalWaves: number;
   spawnedInWave: number;
   remainingInWave: number;
+  waveSpawnComplete: boolean;
+  enemiesRemainingInWave: number;
   evolutionUnlocked: boolean;
 };
 

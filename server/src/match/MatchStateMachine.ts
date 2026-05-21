@@ -13,7 +13,7 @@ export class MatchStateMachine {
   private matchState: MatchState = "LOBBY";
   private elapsedMatchSeconds = 0;
   private stateElapsedSeconds = 0;
-  private readonly currentWaveIndex = 1;
+  private currentWaveIndex = 1;
 
   constructor(private readonly matchId: MatchId) {}
 
@@ -83,9 +83,10 @@ export class MatchStateMachine {
     return this.transitionTo(nextState, serverTimeMs);
   }
 
-  private transitionTo(nextState: MatchState, serverTimeMs: number): MatchPhaseChangedEvent {
+  transitionTo(nextState: MatchState, serverTimeMs: number, waveIndex = this.currentWaveIndex): MatchPhaseChangedEvent {
     const previousState = this.matchState;
     this.matchState = nextState;
+    this.currentWaveIndex = waveIndex;
     this.stateElapsedSeconds = 0;
 
     return {
@@ -112,7 +113,15 @@ export class MatchStateMachine {
       return CombatNumbersV01.match.countdownSeconds;
     }
     if (this.matchState === "WAVE_PREP") {
-      return CombatNumbersV01.match.wave1PrepSeconds;
+      return this.currentWaveIndex === 1
+        ? CombatNumbersV01.match.wave1PrepSeconds
+        : CombatNumbersV01.match.normalWavePrepSeconds;
+    }
+    if (this.matchState === "WAVE_CLEAR") {
+      return CombatNumbersV01.match.waveClearSeconds;
+    }
+    if (this.matchState === "BOSS_PREP") {
+      return CombatNumbersV01.match.bossPrepSeconds;
     }
     return undefined;
   }
