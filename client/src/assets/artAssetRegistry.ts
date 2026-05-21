@@ -32,7 +32,10 @@ export const P0_ART_ASSET_IDS = [
   "ui_icon_hp",
   "fx_hit_spark",
   "fx_muzzle_flash",
-  "fx_boss_weakpoint"
+  "fx_sun_gain",
+  "fx_plant_place",
+  "fx_boss_weakpoint",
+  "fx_boss_charge_warning"
 ] as const;
 
 export type ArtAssetId = (typeof P0_ART_ASSET_IDS)[number];
@@ -50,6 +53,22 @@ export const BATCH_A_ART_ASSET_IDS = [
 ] as const satisfies readonly ArtAssetId[];
 
 export type BatchAArtAssetId = (typeof BATCH_A_ART_ASSET_IDS)[number];
+
+export const BATCH_B_ART_ASSET_IDS = [
+  "tile_ground_lane",
+  "tile_plant_cell",
+  "base_greenhouse_core",
+  "projectile_hero_bullet",
+  "projectile_pea",
+  "fx_muzzle_flash",
+  "fx_hit_spark",
+  "fx_sun_gain",
+  "fx_plant_place",
+  "fx_boss_weakpoint",
+  "fx_boss_charge_warning"
+] as const satisfies readonly ArtAssetId[];
+
+export type BatchBArtAssetId = (typeof BATCH_B_ART_ASSET_IDS)[number];
 export type ArtAssetPriority = "P0";
 export type ArtAssetCategory = "hero" | "plant" | "enemy" | "boss" | "projectile" | "map" | "base" | "ui" | "fx";
 export type ArtAssetSource = "placeholder" | "image-gen" | "game-studio" | "manual";
@@ -154,45 +173,45 @@ export const ArtAssetRegistryV01 = {
     key: "projectile_hero_bullet",
     category: "projectile",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/projectiles/projectile_hero_bullet_placeholder.png",
-    description: "Small bright hero bullet placeholder."
+    source: "manual",
+    path: "assets/art/sprites/projectiles/projectile_hero_bullet.png",
+    description: "Small bright hero bullet streak sprite."
   }),
   projectile_pea: entry({
     id: "projectile_pea",
     key: "projectile_pea",
     category: "projectile",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/projectiles/projectile_pea_placeholder.png",
-    description: "Small green bio-energy plant projectile placeholder."
+    source: "manual",
+    path: "assets/art/sprites/projectiles/projectile_pea.png",
+    description: "Small green bio-energy plant projectile sprite."
   }),
   tile_ground_lane: entry({
     id: "tile_ground_lane",
     key: "tile_ground_lane",
     category: "map",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/environment/tile_ground_lane_placeholder.png",
-    description: "Muted lane ground placeholder used behind gameplay entities."
+    source: "manual",
+    path: "assets/art/sprites/environment/tile_ground_lane.png",
+    description: "Muted low-contrast lane ground tile used behind gameplay entities."
   }),
   tile_plant_cell: entry({
     id: "tile_plant_cell",
     key: "tile_plant_cell",
     category: "map",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/environment/tile_plant_cell_placeholder.png",
-    description: "Plantable cell placeholder overlay."
+    source: "manual",
+    path: "assets/art/sprites/environment/tile_plant_cell.png",
+    description: "Subtle transparent plantable cell overlay."
   }),
   base_greenhouse_core: entry({
     id: "base_greenhouse_core",
     key: "base_greenhouse_core",
     category: "base",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/environment/base_greenhouse_core_placeholder.png",
-    description: "Left-side greenhouse core base placeholder."
+    source: "manual",
+    path: "assets/art/sprites/environment/base_greenhouse_core.png",
+    description: "Left-side greenhouse core base sprite."
   }),
   ui_icon_sun: entry({
     id: "ui_icon_sun",
@@ -225,28 +244,55 @@ export const ArtAssetRegistryV01 = {
     id: "fx_hit_spark",
     key: "fx_hit_spark",
     category: "fx",
-    status: "placeholder",
-    source: "placeholder",
-    path: "assets/art/placeholders/effects/fx_hit_spark_placeholder.png",
-    description: "Small hit spark effect placeholder."
+    status: "integrated",
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_hit_spark.png",
+    description: "Small bright hit spark effect sprite."
   }),
   fx_muzzle_flash: entry({
     id: "fx_muzzle_flash",
     key: "fx_muzzle_flash",
     category: "fx",
-    status: "placeholder",
-    source: "placeholder",
-    path: "assets/art/placeholders/effects/fx_muzzle_flash_placeholder.png",
-    description: "Small hero muzzle flash placeholder."
+    status: "integrated",
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_muzzle_flash.png",
+    description: "Small orange-yellow muzzle flash effect sprite."
+  }),
+  fx_sun_gain: entry({
+    id: "fx_sun_gain",
+    key: "fx_sun_gain",
+    category: "fx",
+    status: "integrated",
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_sun_gain.png",
+    description: "Warm sunlight gain sparkle effect sprite."
+  }),
+  fx_plant_place: entry({
+    id: "fx_plant_place",
+    key: "fx_plant_place",
+    category: "fx",
+    status: "integrated",
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_plant_place.png",
+    description: "Soft green plant placement ring effect sprite."
   }),
   fx_boss_weakpoint: entry({
     id: "fx_boss_weakpoint",
     key: "fx_boss_weakpoint",
     category: "fx",
     status: "integrated",
-    source: "placeholder",
-    path: "assets/art/placeholders/effects/fx_boss_weakpoint_placeholder.png",
-    description: "Bright boss weak point marker placeholder."
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_boss_weakpoint.png",
+    description: "Bright boss weak point marker overlay sprite."
+  }),
+  fx_boss_charge_warning: entry({
+    id: "fx_boss_charge_warning",
+    key: "fx_boss_charge_warning",
+    category: "fx",
+    status: "integrated",
+    source: "manual",
+    path: "assets/art/sprites/effects/fx_boss_charge_warning.png",
+    description: "High-visibility red-orange boss charge warning marker."
   })
 } as const satisfies Record<ArtAssetId, ArtAssetEntry>;
 
@@ -285,11 +331,14 @@ const UI_ICON_ASSET_BY_TYPE = {
 const FX_ASSET_BY_TYPE = {
   hit_spark: "fx_hit_spark",
   muzzle_flash: "fx_muzzle_flash",
-  boss_weakpoint: "fx_boss_weakpoint"
+  sun_gain: "fx_sun_gain",
+  plant_place: "fx_plant_place",
+  boss_weakpoint: "fx_boss_weakpoint",
+  boss_charge_warning: "fx_boss_charge_warning"
 } as const satisfies Record<FxAssetType, ArtAssetId>;
 
 export type UiIconAssetType = "sun" | "ammo" | "hp";
-export type FxAssetType = "hit_spark" | "muzzle_flash" | "boss_weakpoint";
+export type FxAssetType = "hit_spark" | "muzzle_flash" | "sun_gain" | "plant_place" | "boss_weakpoint" | "boss_charge_warning";
 
 export function getHeroAssetKey(slot: PlayerSlot): ArtAssetId {
   return HERO_ASSET_BY_SLOT[slot];

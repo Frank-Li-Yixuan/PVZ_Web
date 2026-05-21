@@ -5,6 +5,7 @@ import {
   ART_ASSET_STATUS_VALUES,
   ArtAssetRegistryV01,
   BATCH_A_ART_ASSET_IDS,
+  BATCH_B_ART_ASSET_IDS,
   P0_ART_ASSET_IDS,
   getArtAssetPublicUrl,
   getBossAssetKey,
@@ -37,7 +38,10 @@ const EXPECTED_P0_IDS = [
   "ui_icon_hp",
   "fx_hit_spark",
   "fx_muzzle_flash",
-  "fx_boss_weakpoint"
+  "fx_sun_gain",
+  "fx_plant_place",
+  "fx_boss_weakpoint",
+  "fx_boss_charge_warning"
 ] as const;
 
 const EXTERNAL_IP_TERMS = [
@@ -104,6 +108,31 @@ describe("Phase 13 art asset registry", () => {
     }
   });
 
+  test("resolves Batch B support assets to Phaser-loadable public URLs", () => {
+    expect(BATCH_B_ART_ASSET_IDS).toEqual([
+      "tile_ground_lane",
+      "tile_plant_cell",
+      "base_greenhouse_core",
+      "projectile_hero_bullet",
+      "projectile_pea",
+      "fx_muzzle_flash",
+      "fx_hit_spark",
+      "fx_sun_gain",
+      "fx_plant_place",
+      "fx_boss_weakpoint",
+      "fx_boss_charge_warning"
+    ]);
+
+    for (const assetId of BATCH_B_ART_ASSET_IDS) {
+      const entry = ArtAssetRegistryV01[assetId];
+      expect(entry.status).toBe("integrated");
+      expect(entry.source).toBe("manual");
+      expect(entry.path).toMatch(/^assets\/art\/sprites\//);
+      expect(existsSync(resolve(process.cwd(), entry.path))).toBe(true);
+      expect(getArtAssetPublicUrl(entry)).toBe(`/${entry.path.replace(/^assets\//, "")}`);
+    }
+  });
+
   test("maps runtime entity types to centralized art asset keys", () => {
     expect(getHeroAssetKey(0)).toBe("hero_ranger_a");
     expect(getHeroAssetKey(1)).toBe("hero_ranger_b");
@@ -121,7 +150,10 @@ describe("Phase 13 art asset registry", () => {
     expect(getUiIconAssetKey("hp")).toBe("ui_icon_hp");
     expect(getFxAssetKey("hit_spark")).toBe("fx_hit_spark");
     expect(getFxAssetKey("muzzle_flash")).toBe("fx_muzzle_flash");
+    expect(getFxAssetKey("sun_gain")).toBe("fx_sun_gain");
+    expect(getFxAssetKey("plant_place")).toBe("fx_plant_place");
     expect(getFxAssetKey("boss_weakpoint")).toBe("fx_boss_weakpoint");
+    expect(getFxAssetKey("boss_charge_warning")).toBe("fx_boss_charge_warning");
   });
 });
 

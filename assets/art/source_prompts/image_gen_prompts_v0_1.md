@@ -163,9 +163,9 @@ Prompt:
 Original stylized 2.5D top-down boss sprite for a cooperative garden defense game, massive polluted siege beast called Ironmaw, bulky fungal body fused with rusted scrap armor, huge metal jaw, toxic green core partially hidden in its chest, heavy forward-moving silhouette facing left, playful apocalypse style, readable boss shape, centered single boss, transparent background, no text, no logo, no watermark, not based on any existing game monster, suitable for a Phaser 2D boss fight.
 ```
 
-## Later Batch Prompt Seeds
+## Batch B - Environment, Projectiles, and Core FX
 
-These P0 assets remain placeholder/integrated in code and can be promoted to generated art after Batch A is visually approved:
+Batch B was prepared in Phase 13B as original manual PNG support art for readability-critical environment, projectile, and FX assets. These prompt seeds remain the source brief for future image-gen replacements:
 
 | Asset ID | Prompt seed |
 |---|---|
@@ -174,9 +174,19 @@ These P0 assets remain placeholder/integrated in code and can be promoted to gen
 | tile_ground_lane | Stylized 2.5D top-down ground tile, muted green-brown greenhouse soil with subtle lane markings, low contrast, slightly polluted but readable, no characters, no text, no logo, no watermark. |
 | tile_plant_cell | Stylized top-down plantable cell overlay, subtle square garden plot marker with soft green border and faint soil center, transparent background, no text, no logo, no watermark. |
 | base_greenhouse_core | Original stylized 2.5D top-down sprite of a small greenhouse core base, glass dome with warm light inside, scrap-tech solar panels, friendly defensive target, transparent background, no text, no logo, no watermark. |
+| fx_hit_spark | Stylized 2D hit spark effect, small bright impact burst with yellow and white sparks, transparent background, no text, no logo, no watermark. |
+| fx_muzzle_flash | Stylized 2D muzzle flash effect sprite, small orange-yellow star burst, transparent background, no text, no logo, no watermark. |
+| fx_sun_gain | Stylized 2D sunlight gain sparkle effect, warm golden particles and small sun glow, transparent background, no text, no logo, no watermark. |
+| fx_plant_place | Stylized 2D plant placement feedback ring, soft green garden energy, subtle leaves and circular ground pulse, transparent background, no text, no logo, no watermark. |
+| fx_boss_weakpoint | Stylized 2D glowing boss weak point marker, toxic green and orange circular crack energy, transparent background, no text, no logo, no watermark. |
+| fx_boss_charge_warning | Stylized 2D warning marker for a boss charge attack, red-orange hazard arrow and impact zone glow, transparent background, no text, no logo, no watermark, clear danger indicator. |
+
+## Later Batch Prompt Seeds
+
+These UI assets remain placeholder/integrated in code and can be promoted to generated art after gameplay readability is stable:
+
+| Asset ID | Prompt seed |
+|---|---|
 | ui_icon_sun | Stylized 2D UI icon of a warm golden sun energy orb, simple clean shape, high readability, transparent background, no text, no logo, no watermark. |
 | ui_icon_ammo | Stylized 2D UI icon of a small ammo cartridge with garden-tech design, yellow brass and teal accent, transparent background, no text, no logo, no watermark. |
 | ui_icon_hp | Stylized 2D UI icon representing health, simple green heart shield shape, transparent background, no text, no logo, no watermark. |
-| fx_hit_spark | Stylized 2D hit spark effect, small bright impact burst with yellow and white sparks, transparent background, no text, no logo, no watermark. |
-| fx_muzzle_flash | Stylized 2D muzzle flash effect sprite, small orange-yellow star burst, transparent background, no text, no logo, no watermark. |
-| fx_boss_weakpoint | Stylized 2D glowing boss weak point marker, toxic green and orange circular crack energy, transparent background, no text, no logo, no watermark. |

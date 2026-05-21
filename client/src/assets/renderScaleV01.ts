@@ -144,12 +144,14 @@ export const RenderScaleV01 = {
     hero_bullet: {
       radius: 4,
       color: 0xfff1a6,
-      outlineRadiusExtra: 2
+      outlineRadiusExtra: 2,
+      spriteHeight: 14
     },
     pea_projectile: {
       radius: 6,
       color: 0x8de36c,
-      outlineRadiusExtra: 2
+      outlineRadiusExtra: 2,
+      spriteHeight: 18
     }
   },
   map: {
@@ -177,9 +179,16 @@ export const RenderScaleV01 = {
   },
   fx: {
     hitSparkRadius: 10,
+    hitSparkSpriteHeight: 34,
     muzzleFlashRadius: 8,
+    muzzleFlashSpriteHeight: 30,
+    sunGainSpriteHeight: 42,
+    plantPlaceSpriteHeight: 56,
     bossWeakPointRadius: 13,
     bossWeakPointOutlineRadius: 19,
+    bossWeakPointSpriteHeight: 46,
+    bossChargeWarningWidth: 250,
+    bossChargeWarningHeight: 78,
     slowOutlineExtraWidth: 12,
     slowOutlineExtraHeight: 10
   },

@@ -50,6 +50,7 @@ import {
 import {
   ArtAssetRegistryV01,
   P0_ART_ASSET_IDS,
+  type FxAssetType,
   getArtAssetPublicUrl,
   getBossAssetKey,
   getEnemyAssetKey,
@@ -184,12 +185,27 @@ type EnemyView = {
 
 type BulletView = {
   graphics: Phaser.GameObjects.Graphics;
+  sprite: Phaser.GameObjects.Image;
 };
 
 type BossView = {
   graphics: Phaser.GameObjects.Graphics;
   sprite: Phaser.GameObjects.Image;
+  weakPointSprite: Phaser.GameObjects.Image;
+  chargeWarningSprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
+};
+
+type FeedbackFxSpec = {
+  fxType: FxAssetType;
+  height: number;
+  width?: number;
+  durationMs: number;
+  alpha?: number;
+  startScale?: number;
+  endScale?: number;
+  depth?: number;
+  rotation?: number;
 };
 
 class BattleScene extends Phaser.Scene {
@@ -298,6 +314,8 @@ class BattleScene extends Phaser.Scene {
 
     const x = event.x ?? this.latestSnapshot?.players[0]?.x ?? MapConfigV01.worldWidthPx / 2;
     const y = event.y ?? this.latestSnapshot?.players[0]?.y ?? MapConfigV01.worldHeightPx / 2;
+    this.showFeedbackFx(event, x, y);
+
     const label = feedbackLabel(event);
     if (!label) {
       return;
@@ -320,6 +338,41 @@ class BattleScene extends Phaser.Scene {
       duration: label.durationMs,
       ease: "Sine.easeOut",
       onComplete: () => text.destroy()
+    });
+  }
+
+  private showFeedbackFx(event: FeedbackEvent, x: number, y: number): void {
+    const spec = feedbackFxSpec(event);
+    if (!spec) {
+      return;
+    }
+
+    const asset = ArtAssetRegistryV01[getFxAssetKey(spec.fxType)];
+    if (!this.textures.exists(asset.key)) {
+      return;
+    }
+
+    const sprite = this.add
+      .image(x, y, asset.key)
+      .setName(`${asset.key}_${event.eventType}`)
+      .setDepth(spec.depth ?? 39)
+      .setAlpha(spec.alpha ?? 0.95)
+      .setRotation(spec.rotation ?? 0);
+    if (spec.width !== undefined) {
+      sprite.setDisplaySize(spec.width, spec.height);
+    } else {
+      fitImageToHeight(sprite, spec.height);
+    }
+    sprite.setScale(sprite.scaleX * (spec.startScale ?? 1), sprite.scaleY * (spec.startScale ?? 1));
+
+    this.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      scaleX: sprite.scaleX * (spec.endScale ?? 1.25),
+      scaleY: sprite.scaleY * (spec.endScale ?? 1.25),
+      duration: spec.durationMs,
+      ease: "Sine.easeOut",
+      onComplete: () => sprite.destroy()
     });
   }
 
@@ -353,54 +406,74 @@ class BattleScene extends Phaser.Scene {
     graphics.fillStyle(mapScale.worldBackground, 1);
     graphics.fillRect(0, 0, MapConfigV01.worldWidthPx, MapConfigV01.worldHeightPx);
 
+    const laneTextureExists = this.textures.exists(laneAsset.key);
+    const cellTextureExists = this.textures.exists(cellAsset.key);
+    const baseTextureExists = this.textures.exists(baseAsset.key);
+
     for (const laneIndex of MapConfigV01.laneIndices) {
       const laneY = MapConfigV01.plantGrid.originY + laneIndex * MapConfigV01.laneHeightPx;
-      graphics.fillStyle(laneIndex % 2 === 0 ? mapScale.laneEvenColor : mapScale.laneOddColor, 1);
-      graphics.fillRoundedRect(
-        MapConfigV01.plantGrid.originX - mapScale.laneInsetX,
-        laneY + mapScale.laneInsetY,
-        MapConfigV01.cellWidthPx * MapConfigV01.plantableColumnCount + mapScale.laneInsetX * 2,
-        MapConfigV01.laneHeightPx - mapScale.laneInsetY * 2,
-        mapScale.laneCornerRadius
-      );
+      const laneX = MapConfigV01.plantGrid.originX - mapScale.laneInsetX;
+      const laneTop = laneY + mapScale.laneInsetY;
+      const laneWidth = MapConfigV01.cellWidthPx * MapConfigV01.plantableColumnCount + mapScale.laneInsetX * 2;
+      const laneHeight = MapConfigV01.laneHeightPx - mapScale.laneInsetY * 2;
+      if (laneTextureExists) {
+        this.add
+          .image(laneX + laneWidth / 2, laneTop + laneHeight / 2, laneAsset.key)
+          .setName(`${laneAsset.key}_${laneIndex}`)
+          .setDepth(1)
+          .setDisplaySize(laneWidth, laneHeight)
+          .setAlpha(laneIndex % 2 === 0 ? 0.94 : 0.86);
+      } else {
+        graphics.fillStyle(laneIndex % 2 === 0 ? mapScale.laneEvenColor : mapScale.laneOddColor, 1);
+        graphics.fillRoundedRect(laneX, laneTop, laneWidth, laneHeight, mapScale.laneCornerRadius);
+      }
 
       for (const columnIndex of MapConfigV01.columnIndices) {
         const x = MapConfigV01.plantGrid.originX + columnIndex * MapConfigV01.cellWidthPx;
-        graphics.fillStyle(mapScale.cellFillColor, mapScale.cellFillAlpha);
-        graphics.fillRoundedRect(
-          x + mapScale.cellInsetX,
-          laneY + mapScale.cellInsetY,
-          MapConfigV01.cellWidthPx - mapScale.cellInsetX * 2,
-          MapConfigV01.laneHeightPx - mapScale.cellInsetY * 2,
-          mapScale.cellCornerRadius
-        );
-        graphics.lineStyle(1, mapScale.cellOutlineColor, mapScale.cellOutlineAlpha);
-        graphics.strokeRoundedRect(
-          x + mapScale.cellInsetX,
-          laneY + mapScale.cellInsetY,
-          MapConfigV01.cellWidthPx - mapScale.cellInsetX * 2,
-          MapConfigV01.laneHeightPx - mapScale.cellInsetY * 2,
-          mapScale.cellCornerRadius
-        );
+        const cellX = x + mapScale.cellInsetX;
+        const cellY = laneY + mapScale.cellInsetY;
+        const cellWidth = MapConfigV01.cellWidthPx - mapScale.cellInsetX * 2;
+        const cellHeight = MapConfigV01.laneHeightPx - mapScale.cellInsetY * 2;
+        if (cellTextureExists) {
+          this.add
+            .image(cellX + cellWidth / 2, cellY + cellHeight / 2, cellAsset.key)
+            .setName(`${cellAsset.key}_${laneIndex}_${columnIndex}`)
+            .setDepth(2)
+            .setDisplaySize(cellWidth, cellHeight)
+            .setAlpha(0.72);
+        } else {
+          graphics.fillStyle(mapScale.cellFillColor, mapScale.cellFillAlpha);
+          graphics.fillRoundedRect(cellX, cellY, cellWidth, cellHeight, mapScale.cellCornerRadius);
+          graphics.lineStyle(1, mapScale.cellOutlineColor, mapScale.cellOutlineAlpha);
+          graphics.strokeRoundedRect(cellX, cellY, cellWidth, cellHeight, mapScale.cellCornerRadius);
+        }
       }
     }
 
-    graphics.fillStyle(mapScale.baseFillColor, 1);
-    graphics.fillRoundedRect(
-      MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
-      MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
-      MapConfigV01.base.width,
-      MapConfigV01.base.height,
-      8
-    );
-    graphics.lineStyle(3, mapScale.baseOutlineColor, 0.7);
-    graphics.strokeRoundedRect(
-      MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
-      MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
-      MapConfigV01.base.width,
-      MapConfigV01.base.height,
-      8
-    );
+    if (baseTextureExists) {
+      this.add
+        .image(MapConfigV01.base.centerX, MapConfigV01.base.centerY + 2, baseAsset.key)
+        .setName(baseAsset.key)
+        .setDepth(6)
+        .setDisplaySize(MapConfigV01.base.width + 42, MapConfigV01.base.height + 28);
+    } else {
+      graphics.fillStyle(mapScale.baseFillColor, 1);
+      graphics.fillRoundedRect(
+        MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
+        MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
+        MapConfigV01.base.width,
+        MapConfigV01.base.height,
+        8
+      );
+      graphics.lineStyle(3, mapScale.baseOutlineColor, 0.7);
+      graphics.strokeRoundedRect(
+        MapConfigV01.base.centerX - MapConfigV01.base.width / 2,
+        MapConfigV01.base.centerY - MapConfigV01.base.height / 2,
+        MapConfigV01.base.width,
+        MapConfigV01.base.height,
+        8
+      );
+    }
 
     graphics.fillStyle(mapScale.spawnFillColor, 1);
     graphics.fillRoundedRect(
@@ -771,13 +844,20 @@ class BattleScene extends Phaser.Scene {
 
     for (const bullet of bullets) {
       const view = this.getBulletView(bullet);
-      drawBulletPlaceholder(view.graphics, bullet);
+      const asset = ArtAssetRegistryV01[getProjectileAssetKey(bullet.type)];
+      if (this.textures.exists(asset.key)) {
+        renderBulletSprite(view, bullet, asset.key);
+      } else {
+        view.sprite.setVisible(false);
+        drawBulletPlaceholder(view.graphics, bullet);
+      }
       renderedBulletIds.add(bullet.id);
     }
 
     for (const [bulletId, view] of this.bulletViews) {
       if (!renderedBulletIds.has(bulletId)) {
         view.graphics.destroy();
+        view.sprite.destroy();
         this.bulletViews.delete(bulletId);
       }
     }
@@ -788,6 +868,8 @@ class BattleScene extends Phaser.Scene {
       if (this.bossView) {
         this.bossView.graphics.destroy();
         this.bossView.sprite.destroy();
+        this.bossView.weakPointSprite.destroy();
+        this.bossView.chargeWarningSprite.destroy();
         this.bossView.label.destroy();
         this.bossView = undefined;
       }
@@ -802,6 +884,7 @@ class BattleScene extends Phaser.Scene {
       view.sprite.setVisible(false);
       drawBossPlaceholder(view.graphics, boss);
     }
+    renderBossMechanicSprites(this, view, boss);
     view.label.setText(bossLabel(boss));
     view.label.setPosition(boss.x, boss.y + 72);
   }
@@ -814,6 +897,11 @@ class BattleScene extends Phaser.Scene {
     this.bossView = {
       graphics: this.add.graphics().setDepth(17),
       sprite: this.add.image(boss.x, boss.y, ArtAssetRegistryV01[getBossAssetKey(boss.bossType)].key).setDepth(17).setVisible(false),
+      weakPointSprite: this.add.image(boss.x, boss.y, ArtAssetRegistryV01[getFxAssetKey("boss_weakpoint")].key).setDepth(23).setVisible(false),
+      chargeWarningSprite: this.add
+        .image(boss.x, boss.y, ArtAssetRegistryV01[getFxAssetKey("boss_charge_warning")].key)
+        .setDepth(16)
+        .setVisible(false),
       label: this.add
         .text(boss.x, boss.y + 72, bossLabel(boss), {
           fontFamily: "Arial, sans-serif",
@@ -834,7 +922,8 @@ class BattleScene extends Phaser.Scene {
     }
 
     const view = {
-      graphics: this.add.graphics().setDepth(22)
+      graphics: this.add.graphics().setDepth(22),
+      sprite: this.add.image(bullet.x, bullet.y, ArtAssetRegistryV01[getProjectileAssetKey(bullet.type)].key).setDepth(23).setVisible(false)
     };
     this.bulletViews.set(bullet.id, view);
     return view;
@@ -1657,6 +1746,50 @@ function renderBossSprite(view: BossView, boss: BossState, textureKey: string): 
   }
 }
 
+function renderBossMechanicSprites(scene: Phaser.Scene, view: BossView, boss: BossState): void {
+  const weakPointAsset = ArtAssetRegistryV01[getFxAssetKey("boss_weakpoint")];
+  const weakPointVisible =
+    boss.weakPointActive &&
+    boss.weakPointX !== undefined &&
+    boss.weakPointY !== undefined &&
+    scene.textures.exists(weakPointAsset.key);
+  view.weakPointSprite.setVisible(weakPointVisible);
+  if (weakPointVisible) {
+    view.weakPointSprite.setTexture(weakPointAsset.key);
+    view.weakPointSprite.setPosition(boss.weakPointX, boss.weakPointY);
+    view.weakPointSprite.setOrigin(0.5);
+    view.weakPointSprite.setAlpha(0.96);
+    fitImageToHeight(view.weakPointSprite, RenderScaleV01.fx.bossWeakPointSpriteHeight);
+  }
+
+  const chargeAsset = ArtAssetRegistryV01[getFxAssetKey("boss_charge_warning")];
+  const chargeVisible = boss.currentSkill === "charge_windup" && scene.textures.exists(chargeAsset.key);
+  view.chargeWarningSprite.setVisible(chargeVisible);
+  if (chargeVisible) {
+    const chargeDistance = CombatNumbersV01.boss.ironmaw.charge.failedChargeDistance;
+    view.chargeWarningSprite.setTexture(chargeAsset.key);
+    view.chargeWarningSprite.setPosition(boss.x - chargeDistance / 2, boss.y + 2);
+    view.chargeWarningSprite.setOrigin(0.5);
+    view.chargeWarningSprite.setRotation(Math.PI);
+    view.chargeWarningSprite.setAlpha(0.82);
+    view.chargeWarningSprite.setDisplaySize(
+      Math.max(RenderScaleV01.fx.bossChargeWarningWidth, chargeDistance + CombatNumbersV01.boss.ironmaw.collisionRadius),
+      RenderScaleV01.fx.bossChargeWarningHeight
+    );
+  }
+}
+
+function renderBulletSprite(view: BulletView, bullet: BulletState, textureKey: string): void {
+  const projectileScale = RenderScaleV01.projectiles[bullet.type];
+  view.graphics.clear();
+  view.sprite.setTexture(textureKey);
+  view.sprite.setVisible(true);
+  view.sprite.setPosition(bullet.x, bullet.y);
+  view.sprite.setOrigin(0.5);
+  view.sprite.setRotation(Math.atan2(bullet.dirY, bullet.dirX));
+  fitImageToHeight(view.sprite, projectileScale.spriteHeight);
+}
+
 function fitImageToHeight(image: Phaser.GameObjects.Image, displayHeight: number): void {
   const sourceHeight = image.height || displayHeight;
   const sourceWidth = image.width || displayHeight;
@@ -1925,6 +2058,81 @@ function phaseBannerLabel(event: MatchPhaseChangedEvent): string | undefined {
   }
   if (event.nextState === "VICTORY") {
     return "Victory";
+  }
+  return undefined;
+}
+
+function feedbackFxSpec(event: FeedbackEvent): FeedbackFxSpec | undefined {
+  if (event.eventType === "hero.shoot" || event.eventType === "plant.shoot") {
+    return {
+      fxType: "muzzle_flash",
+      height: RenderScaleV01.fx.muzzleFlashSpriteHeight,
+      durationMs: 180,
+      startScale: 0.9,
+      endScale: 1.35,
+      rotation: typeof event.data?.dirY === "number" && typeof event.data?.dirX === "number" ? Math.atan2(event.data.dirY, event.data.dirX) : 0
+    };
+  }
+  if (event.eventType === "plant.placed") {
+    return {
+      fxType: "plant_place",
+      height: RenderScaleV01.fx.plantPlaceSpriteHeight,
+      durationMs: 520,
+      alpha: 0.86,
+      startScale: 0.82,
+      endScale: 1.2,
+      depth: 24
+    };
+  }
+  if (event.eventType === "sun.gained") {
+    return {
+      fxType: "sun_gain",
+      height: RenderScaleV01.fx.sunGainSpriteHeight,
+      durationMs: 560,
+      startScale: 0.82,
+      endScale: 1.25,
+      depth: 42
+    };
+  }
+  if (
+    event.eventType === "enemy.hit" ||
+    event.eventType === "enemy.killed" ||
+    event.eventType === "base.damaged" ||
+    event.eventType === "boss.interrupted" ||
+    event.eventType === "boss.chargeFailed"
+  ) {
+    return {
+      fxType: "hit_spark",
+      height: RenderScaleV01.fx.hitSparkSpriteHeight,
+      durationMs: 300,
+      startScale: 0.85,
+      endScale: 1.4,
+      depth: 41
+    };
+  }
+  if (event.eventType === "boss.weakPointExposed") {
+    return {
+      fxType: "boss_weakpoint",
+      height: RenderScaleV01.fx.bossWeakPointSpriteHeight,
+      durationMs: 680,
+      alpha: 0.96,
+      startScale: 0.85,
+      endScale: 1.15,
+      depth: 43
+    };
+  }
+  if (event.eventType === "boss.chargeStarted") {
+    return {
+      fxType: "boss_charge_warning",
+      width: RenderScaleV01.fx.bossChargeWarningWidth,
+      height: RenderScaleV01.fx.bossChargeWarningHeight,
+      durationMs: 760,
+      alpha: 0.9,
+      startScale: 0.96,
+      endScale: 1.04,
+      rotation: Math.PI,
+      depth: 38
+    };
   }
   return undefined;
 }
