@@ -22,6 +22,7 @@ rejected
 - Batch A prompts are ready in `assets/art/source_prompts/image_gen_prompts_v0_1.md`.
 - Phase 13A generated Batch A PNGs with image-gen, removed chroma-key backgrounds locally, and integrated usable outputs.
 - Phase 13B prepared original manual PNG support assets for environment, projectiles, and core FX, and integrated usable outputs.
+- Phase 13C generated deterministic candidate spritesheets under `assets/art/animations/` and tracks them in `assets/docs/animation_asset_status_v0_1.md`; runtime tween fallbacks remain active until sheet integration is approved.
 - No external copyrighted game assets, character names, studio names, logos, or unclear-license files are integrated.
 - Gameplay readability remains the approval gate before visual detail.
 

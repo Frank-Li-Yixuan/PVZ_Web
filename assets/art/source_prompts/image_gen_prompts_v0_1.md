@@ -181,6 +181,99 @@ Batch B was prepared in Phase 13B as original manual PNG support art for readabi
 | fx_boss_weakpoint | Stylized 2D glowing boss weak point marker, toxic green and orange circular crack energy, transparent background, no text, no logo, no watermark. |
 | fx_boss_charge_warning | Stylized 2D warning marker for a boss charge attack, red-orange hazard arrow and impact zone glow, transparent background, no text, no logo, no watermark, clear danger indicator. |
 
+## Batch C - P0 Animation Candidate Sheets
+
+Batch C currently has deterministic seed-transform PNG candidates generated from approved V0.1 seed sprites. These prompts are ready for a later image-gen sprite-strip replacement pass if stronger frame-to-frame pose variation is needed. All prompts require one horizontal row, transparent background, no text, no logo, no watermark, no external game references, and consistent silhouettes across frames.
+
+Target candidate files:
+
+```text
+hero_ranger_a_run_sheet.png
+hero_ranger_b_run_sheet.png
+plant_sunbloom_produce_sheet.png
+plant_peashotter_shoot_sheet.png
+enemy_shambler_walk_sheet.png
+enemy_runner_walk_sheet.png
+enemy_brute_walk_sheet.png
+boss_ironmaw_charge_windup_sheet.png
+fx_muzzle_flash_sheet.png
+fx_hit_spark_sheet.png
+fx_boss_weakpoint_sheet.png
+fx_boss_charge_warning_sheet.png
+```
+
+### hero_ranger_a_run_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 128x128 pixels per frame, transparent background, of the existing original cyan-teal greenhouse ranger hero running in place while facing the same gameplay direction. Preserve the same compact scrap-tech gardener armor, goggles, small pistol, backpack, palette, proportions, and readable silhouette from hero_ranger_a_idle. Frames should show subtle step bob, body lean, and arm/leg motion suitable for a top-down 2.5D Phaser game. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### hero_ranger_b_run_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 128x128 pixels per frame, transparent background, of the existing original orange-yellow greenhouse ranger hero running in place while facing the same gameplay direction. Preserve the warm accent colors, scrap-tech garden armor, small pistol, backpack, visor/goggles, proportions, and silhouette from hero_ranger_b_idle. Frames should show subtle step bob, body lean, and arm/leg motion for a readable top-down 2.5D browser game. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### plant_sunbloom_produce_sheet
+
+```text
+Create one horizontal 3-frame spritesheet, 128x128 pixels per frame, transparent background, of the original Sunbloom economy plant producing sunlight. Preserve the round golden energy core, short green leaves, greenhouse bio-tech design, and centered readable silhouette from plant_sunbloom_idle. Frames should show the core brightening, a warm golden pulse, and small contained sparkle shapes without changing the plant identity. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### plant_peashotter_shoot_sheet
+
+```text
+Create one horizontal 3-frame spritesheet, 128x128 pixels per frame, transparent background, of the original Peashotter bio-seed launcher plant firing. Preserve the green body, teal seed-cannon stem, leaf base, and compact original silhouette from plant_peashotter_idle. Frames should show pre-fire hold, squash/recoil with a tiny muzzle burst, and return-to-idle. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### enemy_shambler_walk_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 128x128 pixels per frame, transparent background, of the original polluted shambler enemy walking left. Preserve its gray-green fungal body, purple grime patches, slow uneven posture, readable face, and medium enemy silhouette from enemy_shambler_idle. Frames should show a slow shuffling gait with small body wobble. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### enemy_runner_walk_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 128x128 pixels per frame, transparent background, of the original polluted runner enemy sprinting left. Preserve its lean forward-tilted silhouette, purple-magenta toxic streaks, vine-like legs, and fast-unit readability from enemy_runner_idle. Frames should show quick alternating stride poses and slight motion lean while staying readable at small size. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### enemy_brute_walk_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 160x160 pixels per frame, transparent background, of the original armored polluted brute enemy stomping left. Preserve the bulky fungal body, rusted scrap shell, large shoulders, heavy tank role, and silhouette from enemy_brute_idle. Frames should show heavy weight-shift steps and subtle armor bob. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### boss_ironmaw_charge_windup_sheet
+
+```text
+Create one horizontal 4-frame spritesheet, 512x512 pixels per frame, transparent background, of the original Ironmaw siege beast charging up a windup attack while facing left. Preserve the huge rusted armor mass, fungal body, metal jaw, toxic green core, and readable boss silhouette from boss_ironmaw_phase1. Frames should escalate from tense crouch to forward lean with a visible contained warning glow around the core and shoulders. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### fx_muzzle_flash_sheet
+
+```text
+Create one horizontal 4-frame 2D FX spritesheet on transparent background of a compact orange-yellow muzzle flash burst. Frames should grow quickly then fade, with a crisp star-like flash and no weapon or character included. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### fx_hit_spark_sheet
+
+```text
+Create one horizontal 5-frame 2D FX spritesheet on transparent background of a bright hit spark impact. Frames should pop outward with yellow-white shards and then dissipate, readable at small combat size. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### fx_boss_weakpoint_sheet
+
+```text
+Create one horizontal 4-frame 2D FX spritesheet on transparent background of a pulsing boss weak point marker, toxic green center with orange/yellow ring energy, circular and highly visible. Frames should pulse brighter and larger, then return. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
+### fx_boss_charge_warning_sheet
+
+```text
+Create one horizontal 4-frame 2D FX spritesheet on transparent background of a red-orange boss charge warning marker. Frames should pulse brighter and wider, with a clear danger direction shape suitable for a lane-based top-down battlefield. No text, no logo, no watermark, no background, no external game style imitation.
+```
+
 ## Later Batch Prompt Seeds
 
 These UI assets remain placeholder/integrated in code and can be promoted to generated art after gameplay readability is stable:

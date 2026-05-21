@@ -38,6 +38,21 @@ const REQUIRED_ANIMATION_IDS = [
   "fx.bossInterrupted"
 ] as const;
 
+const EXPECTED_ANIMATION_CANDIDATE_SHEETS = [
+  ["hero.rangerA.run", "assets/art/animations/heroes/hero_ranger_a_run_sheet.png", 512, 128, 4, 128, 128],
+  ["hero.rangerB.run", "assets/art/animations/heroes/hero_ranger_b_run_sheet.png", 512, 128, 4, 128, 128],
+  ["plant.sunbloom.produce", "assets/art/animations/plants/plant_sunbloom_produce_sheet.png", 384, 128, 3, 128, 128],
+  ["plant.peashotter.shoot", "assets/art/animations/plants/plant_peashotter_shoot_sheet.png", 384, 128, 3, 128, 128],
+  ["enemy.shambler.walk", "assets/art/animations/enemies/enemy_shambler_walk_sheet.png", 512, 128, 4, 128, 128],
+  ["enemy.runner.walk", "assets/art/animations/enemies/enemy_runner_walk_sheet.png", 512, 128, 4, 128, 128],
+  ["enemy.brute.walk", "assets/art/animations/enemies/enemy_brute_walk_sheet.png", 640, 160, 4, 160, 160],
+  ["boss.ironmaw.chargeWindup", "assets/art/animations/boss/boss_ironmaw_charge_windup_sheet.png", 2048, 512, 4, 512, 512],
+  ["fx.muzzleFlash", "assets/art/animations/fx/fx_muzzle_flash_sheet.png", 256, 64, 4, 64, 64],
+  ["fx.hitSpark", "assets/art/animations/fx/fx_hit_spark_sheet.png", 320, 64, 5, 64, 64],
+  ["fx.bossWeakpoint", "assets/art/animations/fx/fx_boss_weakpoint_sheet.png", 384, 96, 4, 96, 96],
+  ["fx.bossChargeWarning", "assets/art/animations/fx/fx_boss_charge_warning_sheet.png", 512, 64, 4, 128, 64]
+] as const;
+
 const EXTERNAL_IP_TERMS = [
   "Plants vs. Zombies",
   "Plants vs Zombies",
@@ -79,8 +94,11 @@ describe("Phase 13C animation registry", () => {
 
   test("documents every required animation id and status value", () => {
     const statusPath = resolve(process.cwd(), "assets/docs/animation_asset_status_v0_1.md");
+    const promptPath = resolve(process.cwd(), "assets/art/source_prompts/image_gen_prompts_v0_1.md");
     expect(existsSync(statusPath)).toBe(true);
+    expect(existsSync(promptPath)).toBe(true);
     const statusDoc = readFileSync(statusPath, "utf8");
+    const promptDoc = readFileSync(promptPath, "utf8");
 
     for (const animationId of REQUIRED_ANIMATION_IDS) {
       expect(statusDoc).toContain(animationId);
@@ -88,8 +106,35 @@ describe("Phase 13C animation registry", () => {
     for (const status of ["missing", "fallback_only", "prompt_ready", "generated", "integrated"]) {
       expect(statusDoc).toContain(status);
     }
+    for (const [, assetPath] of EXPECTED_ANIMATION_CANDIDATE_SHEETS) {
+      expect(statusDoc).toContain(assetPath);
+      expect(promptDoc).toContain(assetPath.split("/").at(-1));
+    }
     expect(statusDoc).toContain("No server-authoritative gameplay rules changed");
     expectContainsNoExternalIpTerms(statusDoc);
+    expectContainsNoExternalIpTerms(promptDoc);
+  });
+
+  test("tracks generated candidate spritesheets with exact horizontal frame dimensions", async () => {
+    const { AnimationRegistryV01 } = await loadAnimationRegistry();
+
+    for (const [animationId, assetPath, width, height, frameCount, frameWidth, frameHeight] of EXPECTED_ANIMATION_CANDIDATE_SHEETS) {
+      const absolutePath = resolve(process.cwd(), assetPath);
+      expect(existsSync(absolutePath), assetPath).toBe(true);
+      expect(readPngDimensions(absolutePath)).toEqual({ width, height });
+
+      const entry = AnimationRegistryV01[animationId];
+      expect(entry.status).toBe("generated");
+      expect(entry.candidateSheet).toEqual({
+        path: assetPath,
+        frameWidth,
+        frameHeight,
+        frameCount,
+        layout: "horizontal",
+        source: "procedural_seed_transform",
+        integration: "candidate_only"
+      });
+    }
   });
 });
 
@@ -233,4 +278,13 @@ function expectContainsNoExternalIpTerms(value: string): void {
   for (const term of EXTERNAL_IP_TERMS) {
     expect(value).not.toContain(term);
   }
+}
+
+function readPngDimensions(filePath: string): { width: number; height: number } {
+  const header = readFileSync(filePath);
+  expect(header.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  return {
+    width: header.readUInt32BE(16),
+    height: header.readUInt32BE(20)
+  };
 }
