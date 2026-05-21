@@ -13,10 +13,13 @@ import {
   type MatchId,
   type MatchPhaseChangedEvent,
   type MoveInputPayload,
+  type BuyAmmoRequestPayload,
   type PlantRequestPayload,
   type PlayerId,
   type PlayerState,
-  type RoomStatePayload
+  type ReloadRequestPayload,
+  type RoomStatePayload,
+  type ShootRequestPayload
 } from "@sprout-and-steel/shared";
 import { MatchStateMachine } from "./MatchStateMachine";
 import { EconomySystem } from "../systems/EconomySystem";
@@ -24,6 +27,7 @@ import { EnemySystem } from "../systems/EnemySystem";
 import { PlantCombatSystem } from "../systems/PlantCombatSystem";
 import { PlantSystem, type PlantActionResult } from "../systems/PlantSystem";
 import { ProjectileSystem } from "../systems/ProjectileSystem";
+import { WeaponSystem, type WeaponActionResult } from "../systems/WeaponSystem";
 
 export type GameLoopOptions = {
   matchId: MatchId;
@@ -47,6 +51,7 @@ type PlayerRuntimeState = PlayerState & {
   moveDirY: number;
   aimWorldX: number | undefined;
   aimWorldY: number | undefined;
+  nextAllowedShotTimeMs?: number;
 };
 
 export class GameLoop {
@@ -70,6 +75,7 @@ export class GameLoop {
   private readonly enemySystem = new EnemySystem();
   private readonly projectileSystem = new ProjectileSystem();
   private readonly plantCombatSystem = new PlantCombatSystem();
+  private readonly weaponSystem = new WeaponSystem();
   private readonly pendingSnapshotEvents: FeedbackEvent[] = [];
 
   constructor(private readonly options: GameLoopOptions) {
@@ -143,6 +149,43 @@ export class GameLoop {
     });
   }
 
+  applyShootAction(playerId: PlayerId, request: ShootRequestPayload): WeaponActionResult {
+    this.syncPlayers(this.options.getRoomState());
+
+    return this.weaponSystem.tryShoot({
+      requestId: request.requestId,
+      matchState: this.stateMachine.getMatchState(),
+      player: this.playersById.get(playerId),
+      aimWorldX: request.aimWorldX,
+      aimWorldY: request.aimWorldY,
+      projectiles: this.projectileSystem,
+      serverTimeMs: this.now()
+    });
+  }
+
+  applyReloadAction(playerId: PlayerId, request: ReloadRequestPayload): WeaponActionResult {
+    this.syncPlayers(this.options.getRoomState());
+
+    return this.weaponSystem.tryReload({
+      requestId: request.requestId,
+      matchState: this.stateMachine.getMatchState(),
+      player: this.playersById.get(playerId),
+      serverTimeMs: this.now()
+    });
+  }
+
+  applyBuyAmmoAction(playerId: PlayerId, request: BuyAmmoRequestPayload): WeaponActionResult {
+    this.syncPlayers(this.options.getRoomState());
+
+    return this.weaponSystem.tryBuyAmmo({
+      requestId: request.requestId,
+      matchState: this.stateMachine.getMatchState(),
+      player: this.playersById.get(playerId),
+      economy: this.economySystem,
+      serverTimeMs: this.now()
+    });
+  }
+
   applyDebugCommand(payload: DebugCommandPayload): DebugCommandResult {
     if (!canMutateCombat(this.stateMachine.getMatchState())) {
       return {
@@ -198,6 +241,7 @@ export class GameLoop {
 
     if (canMutateCombat(matchState)) {
       this.pendingSnapshotEvents.push(
+        ...this.weaponSystem.update(this.tickDeltaSeconds, this.playersById.values(), serverTimeMs),
         ...this.plantSystem.update(this.tickDeltaSeconds, this.economySystem, serverTimeMs),
         ...this.plantCombatSystem.update(
           this.tickDeltaSeconds,
@@ -206,7 +250,13 @@ export class GameLoop {
           this.projectileSystem,
           serverTimeMs
         ),
-        ...this.projectileSystem.update(this.tickDeltaSeconds, this.enemySystem, this.economySystem, serverTimeMs)
+        ...this.projectileSystem.update(
+          this.tickDeltaSeconds,
+          this.enemySystem,
+          this.economySystem,
+          serverTimeMs,
+          this.playersById
+        )
       );
 
       const enemyResult = this.enemySystem.update(
@@ -341,6 +391,7 @@ function createRuntimePlayer(player: RoomStatePayload["players"][number]): Playe
     maxReserveAmmo: CombatNumbersV01.weapon.pistol.maxReserveAmmo,
     reloading: false,
     ammoPurchaseCooldownRemainingSeconds: 0,
+    nextAllowedShotTimeMs: 0,
     hasEvolved: false,
     stats: {},
     moveDirX: 0,
@@ -351,7 +402,7 @@ function createRuntimePlayer(player: RoomStatePayload["players"][number]): Playe
 }
 
 function toSnapshotPlayer(player: PlayerRuntimeState): PlayerState {
-  return {
+  const snapshot: PlayerState = {
     playerId: player.playerId,
     slot: player.slot,
     name: player.name,
@@ -372,6 +423,12 @@ function toSnapshotPlayer(player: PlayerRuntimeState): PlayerState {
     hasEvolved: player.hasEvolved,
     stats: player.stats
   };
+
+  if (player.reloadRemainingSeconds !== undefined) {
+    snapshot.reloadRemainingSeconds = player.reloadRemainingSeconds;
+  }
+
+  return snapshot;
 }
 
 function normalizeFiniteVector(x: number, y: number): { x: number; y: number } {

@@ -23,14 +23,17 @@ import {
   type JoinRoomRequest,
   type MatchPhaseChangedEvent,
   type MoveInputPayload,
+  type BuyAmmoRequestPayload,
   type PlantRequestPayload,
   type PlantState,
   type PlantType,
   type PlayerState,
+  type ReloadRequestPayload,
   type RoomCreatedPayload,
   type RoomErrorPayload,
   type RoomJoinedPayload,
   type RoomStatePayload,
+  type ShootRequestPayload,
   type Vector2
 } from "@sprout-and-steel/shared";
 import "./styles.css";
@@ -39,6 +42,9 @@ let battleScene: BattleScene | undefined;
 let sendMoveInput: (payload: MoveInputPayload) => void = () => {};
 let sendAimInput: (worldPoint: Vector2) => void = () => {};
 let sendPlantRequest: (payload: PlantRequestPayload) => void = () => {};
+let sendShootRequest: (payload: ShootRequestPayload) => void = () => {};
+let sendReloadRequest: (payload: ReloadRequestPayload) => void = () => {};
+let sendBuyAmmoRequest: (payload: BuyAmmoRequestPayload) => void = () => {};
 let sendDebugCommand: (payload: DebugCommandPayload) => void = () => {};
 let getLocalPlayerId: () => string | undefined = () => undefined;
 let selectedPlantType: PlantType = "sunbloom";
@@ -100,7 +106,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 306, `Phase 5 planting economy build ${PROJECT_VERSION}`, {
+      .text(width / 2, 306, `Phase 7 hero pistol build ${PROJECT_VERSION}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: "#f3c84b"
@@ -108,7 +114,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 374, "Create or join a room to test shared sunlight and planting.", {
+      .text(width / 2, 374, "Create or join a room to test plants, enemies, and hero ammo.", {
         fontFamily: "Arial, sans-serif",
         fontSize: "17px",
         color: "#d9e3d3"
@@ -185,7 +191,15 @@ class BattleScene extends Phaser.Scene {
       this.input.keyboard.on("keydown-TWO", () => selectPlantType(PLANT_HOTKEYS.TWO));
       this.input.keyboard.on("keydown-THREE", () => selectPlantType(PLANT_HOTKEYS.THREE));
       this.input.keyboard.on("keydown-E", () => this.trySendPlantRequest());
+      this.input.keyboard.on("keydown-R", () => this.trySendReloadRequest());
+      this.input.keyboard.on("keydown-Q", () => this.trySendBuyAmmoRequest());
     }
+
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.leftButtonDown()) {
+        this.trySendShootRequest(pointer);
+      }
+    });
 
     this.add
       .text(20, 18, `${PROJECT_NAME} V0.1`, {
@@ -523,6 +537,39 @@ class BattleScene extends Phaser.Scene {
     });
   }
 
+  private trySendShootRequest(pointer: Phaser.Input.Pointer): void {
+    if (isTextInputFocused()) {
+      return;
+    }
+
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    sendShootRequest({
+      requestId: createClientRequestId(),
+      aimWorldX: worldPoint.x,
+      aimWorldY: worldPoint.y
+    });
+  }
+
+  private trySendReloadRequest(): void {
+    if (isTextInputFocused()) {
+      return;
+    }
+
+    sendReloadRequest({
+      requestId: createClientRequestId()
+    });
+  }
+
+  private trySendBuyAmmoRequest(): void {
+    if (isTextInputFocused()) {
+      return;
+    }
+
+    sendBuyAmmoRequest({
+      requestId: createClientRequestId()
+    });
+  }
+
   private renderPlants(plants: PlantState[]): void {
     const renderedPlantIds = new Set<string>();
 
@@ -766,6 +813,14 @@ socket.on(S2C.ROOM_ERROR, (payload: RoomErrorPayload) => {
 socket.on(S2C.ACTION_ACCEPTED, (payload: ActionAcceptedPayload) => {
   if (payload.action === "plant") {
     showActionToast("Plant placed.");
+    return;
+  }
+  if (payload.action === "reload") {
+    showActionToast("Reloading.");
+    return;
+  }
+  if (payload.action === "buyAmmo") {
+    showActionToast("Ammo purchased.");
   }
 });
 
@@ -785,6 +840,14 @@ socket.on(S2C.FEEDBACK_EVENT, (payload: FeedbackEvent) => {
   }
   if (payload.eventType === "enemy.killed") {
     showActionToast("Enemy down.");
+    return;
+  }
+  if (payload.eventType === "hero.dryFire") {
+    showActionToast("Ammo empty.");
+    return;
+  }
+  if (payload.eventType === "hero.reloadComplete") {
+    showActionToast("Reload complete.");
   }
 });
 
@@ -886,6 +949,33 @@ sendPlantRequest = (payload: PlantRequestPayload) => {
   socket.emit(C2S.ACTION_PLANT, payload);
 };
 
+sendShootRequest = (payload: ShootRequestPayload) => {
+  if (!lobbyState.matchId) {
+    showActionToast("Create or join a room first.");
+    return;
+  }
+
+  socket.emit(C2S.ACTION_SHOOT, payload);
+};
+
+sendReloadRequest = (payload: ReloadRequestPayload) => {
+  if (!lobbyState.matchId) {
+    showActionToast("Create or join a room first.");
+    return;
+  }
+
+  socket.emit(C2S.ACTION_RELOAD, payload);
+};
+
+sendBuyAmmoRequest = (payload: BuyAmmoRequestPayload) => {
+  if (!lobbyState.matchId) {
+    showActionToast("Create or join a room first.");
+    return;
+  }
+
+  socket.emit(C2S.ACTION_BUY_AMMO, payload);
+};
+
 sendDebugCommand = (payload: DebugCommandPayload) => {
   if (!lobbyState.matchId) {
     showActionToast("Create or join a room first.");
@@ -984,6 +1074,17 @@ function renderMatchDebug(): void {
     ? `P:${snapshot.players.length} Pl:${snapshot.plants.length} E:${snapshot.enemies.length} B:${snapshot.bullets.length}`
     : "-";
   lobby.sharedSun.textContent = snapshot ? String(snapshot.economy.sharedSun) : "-";
+  lobby.ammoMagazine.textContent = localPlayer
+    ? `${localPlayer.ammoInMagazine}/${localPlayer.magazineSize}`
+    : "-";
+  lobby.ammoReserve.textContent = localPlayer ? `${localPlayer.reserveAmmo}/${localPlayer.maxReserveAmmo}` : "-";
+  lobby.reloadState.textContent = localPlayer?.reloading
+    ? `${(localPlayer.reloadRemainingSeconds ?? 0).toFixed(1)}s`
+    : "Ready";
+  lobby.ammoCooldown.textContent =
+    localPlayer && localPlayer.ammoPurchaseCooldownRemainingSeconds > 0
+      ? `${localPlayer.ammoPurchaseCooldownRemainingSeconds.toFixed(1)}s`
+      : "Ready";
   lobby.selectedPlant.textContent = PLANT_LABELS[selectedPlantType];
   lobby.hoverCell.textContent = currentHoverCellLabel;
 }
@@ -1122,6 +1223,18 @@ function drawHpBar(
 }
 
 function feedbackLabel(event: FeedbackEvent): { text: string; color: string; size: string; durationMs: number } | undefined {
+  if (event.eventType === "hero.shoot") {
+    return { text: "bang", color: "#fff1a6", size: "12px", durationMs: 220 };
+  }
+  if (event.eventType === "hero.dryFire") {
+    return { text: "empty", color: "#ffb3a5", size: "12px", durationMs: 420 };
+  }
+  if (event.eventType === "hero.reloadStart") {
+    return { text: "reload", color: "#cfe4ca", size: "12px", durationMs: 460 };
+  }
+  if (event.eventType === "hero.reloadComplete") {
+    return { text: "ready", color: "#8de36c", size: "12px", durationMs: 420 };
+  }
   if (event.eventType === "enemy.spawned") {
     return { text: "spawn", color: "#ffbfcc", size: "12px", durationMs: 360 };
   }
@@ -1180,6 +1293,10 @@ function createLobbyUi(): {
   sharedSun: HTMLSpanElement;
   selectedPlant: HTMLSpanElement;
   hoverCell: HTMLSpanElement;
+  ammoMagazine: HTMLSpanElement;
+  ammoReserve: HTMLSpanElement;
+  reloadState: HTMLSpanElement;
+  ammoCooldown: HTMLSpanElement;
   debugLaneInput: HTMLInputElement;
   spawnShamblerButton: HTMLButtonElement;
   spawnRunnerButton: HTMLButtonElement;
@@ -1235,6 +1352,15 @@ function createLobbyUi(): {
         <div><dt>Sun</dt><dd data-testid="shared-sun">-</dd></div>
         <div><dt>Selected</dt><dd data-testid="selected-plant">1 Sunbloom</dd></div>
         <div><dt>Cell</dt><dd data-testid="hover-cell">-</dd></div>
+      </dl>
+    </section>
+    <section class="weapon-hud" aria-label="Weapon">
+      <h3>Weapon</h3>
+      <dl class="room-meta">
+        <div><dt>Magazine</dt><dd data-testid="ammo-magazine">-</dd></div>
+        <div><dt>Reserve</dt><dd data-testid="ammo-reserve">-</dd></div>
+        <div><dt>Reload</dt><dd data-testid="reload-state">-</dd></div>
+        <div><dt>Buy CD</dt><dd data-testid="ammo-cooldown">-</dd></div>
       </dl>
     </section>
     <section class="debug-overlay" aria-label="Debug overlay">
@@ -1295,6 +1421,10 @@ function createLobbyUi(): {
     sharedSun: requiredElement(panel, "[data-testid='shared-sun']"),
     selectedPlant: requiredElement(panel, "[data-testid='selected-plant']"),
     hoverCell: requiredElement(panel, "[data-testid='hover-cell']"),
+    ammoMagazine: requiredElement(panel, "[data-testid='ammo-magazine']"),
+    ammoReserve: requiredElement(panel, "[data-testid='ammo-reserve']"),
+    reloadState: requiredElement(panel, "[data-testid='reload-state']"),
+    ammoCooldown: requiredElement(panel, "[data-testid='ammo-cooldown']"),
     debugLaneInput: requiredElement(panel, "[data-testid='debug-lane']"),
     spawnShamblerButton: requiredElement(panel, "[data-testid='spawn-shambler']"),
     spawnRunnerButton: requiredElement(panel, "[data-testid='spawn-runner']"),

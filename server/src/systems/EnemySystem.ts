@@ -46,6 +46,7 @@ export type EnemyUpdateResult = {
 export type EnemyDamageResult = {
   events: FeedbackEvent[];
   killed: boolean;
+  damageApplied: number;
 };
 
 export class EnemySystem {
@@ -157,14 +158,15 @@ export class EnemySystem {
 
   damageEnemy(enemyId: string | undefined, amount: number, economy: EconomySystem, serverTimeMs: number): EnemyDamageResult {
     if (!enemyId || !Number.isFinite(amount) || amount <= 0) {
-      return { events: [], killed: false };
+      return { events: [], killed: false, damageApplied: 0 };
     }
 
     const enemy = this.enemiesById.get(enemyId);
     if (!enemy || enemy.state === "DEAD") {
-      return { events: [], killed: false };
+      return { events: [], killed: false, damageApplied: 0 };
     }
 
+    const damageApplied = Math.min(enemy.hp, amount);
     enemy.hp = Math.max(0, enemy.hp - amount);
     const events: FeedbackEvent[] = [
       {
@@ -176,14 +178,14 @@ export class EnemySystem {
         y: enemy.y,
         data: {
           enemyType: enemy.type,
-          damage: amount,
+          damage: damageApplied,
           hp: enemy.hp
         }
       }
     ];
 
     if (enemy.hp > 0) {
-      return { events, killed: false };
+      return { events, killed: false, damageApplied };
     }
 
     enemy.state = "DEAD";
@@ -218,7 +220,7 @@ export class EnemySystem {
       });
     }
 
-    return { events, killed: true };
+    return { events, killed: true, damageApplied };
   }
 
   findPeashotterTarget(plant: PlantState): EnemyState | undefined {
@@ -248,6 +250,44 @@ export class EnemySystem {
       .filter((enemy) => enemy.x >= minX && enemy.x <= maxX)
       .sort((a, b) => (input.endX >= input.startX ? a.x - b.x : b.x - a.x))
       .map(toEnemySnapshot)
+      .at(0);
+  }
+
+  findFirstEnemyHitInSegment(input: {
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    radius: number;
+  }): EnemyState | undefined {
+    const dx = input.endX - input.startX;
+    const dy = input.endY - input.startY;
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 0) {
+      return undefined;
+    }
+
+    const collisionRadius = input.radius + ENEMY_COLLISION_RADIUS_PX;
+    const collisionRadiusSquared = collisionRadius * collisionRadius;
+
+    return [...this.enemiesById.values()]
+      .filter((enemy) => enemy.state !== "DEAD")
+      .map((enemy) => {
+        const projected =
+          ((enemy.x - input.startX) * dx + (enemy.y - input.startY) * dy) / lengthSquared;
+        const t = Math.max(0, Math.min(1, projected));
+        const closestX = input.startX + dx * t;
+        const closestY = input.startY + dy * t;
+        const distanceSquared = (enemy.x - closestX) ** 2 + (enemy.y - closestY) ** 2;
+        return {
+          enemy,
+          t,
+          distanceSquared
+        };
+      })
+      .filter((candidate) => candidate.distanceSquared <= collisionRadiusSquared)
+      .sort((a, b) => a.t - b.t || a.distanceSquared - b.distanceSquared)
+      .map((candidate) => toEnemySnapshot(candidate.enemy))
       .at(0);
   }
 

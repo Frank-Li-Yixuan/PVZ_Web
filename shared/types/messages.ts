@@ -90,11 +90,14 @@ export type AimInputPayload = {
 };
 
 export type ShootRequestPayload = {
+  requestId: RequestId;
   aimWorldX: number;
   aimWorldY: number;
 };
 
-export type ReloadRequestPayload = Record<string, never>;
+export type ReloadRequestPayload = {
+  requestId: RequestId;
+};
 
 export type PlantRequestPayload = {
   requestId: RequestId;
@@ -103,7 +106,9 @@ export type PlantRequestPayload = {
   columnIndex: 0 | 1 | 2 | 3 | 4 | 5 | 6;
 };
 
-export type BuyAmmoRequestPayload = Record<string, never>;
+export type BuyAmmoRequestPayload = {
+  requestId: RequestId;
+};
 
 export type EvolveRequestPayload = {
   path: EvolutionPath;

@@ -4,7 +4,10 @@ import {
   getPlantCellCenter,
   type BulletState,
   type FeedbackEvent,
-  type PlantState
+  type PlantState,
+  type PlayerId,
+  type PlayerState,
+  type Vector2
 } from "@sprout-and-steel/shared";
 import type { EconomySystem } from "./EconomySystem";
 import type { EnemySystem } from "./EnemySystem";
@@ -12,6 +15,8 @@ import type { EnemySystem } from "./EnemySystem";
 type ProjectileRuntimeState = BulletState & {
   laneIndex?: number;
 };
+
+type PlayerLookup = Map<PlayerId, PlayerState>;
 
 export class ProjectileSystem {
   private readonly bulletsById = new Map<string, ProjectileRuntimeState>();
@@ -40,7 +45,31 @@ export class ProjectileSystem {
     return toBulletSnapshot(bullet);
   }
 
-  update(deltaSeconds: number, enemies: EnemySystem, economy: EconomySystem, serverTimeMs: number): FeedbackEvent[] {
+  spawnHeroBullet(player: PlayerState, direction: Vector2, _serverTimeMs: number): BulletState {
+    const config = CombatNumbersV01.weapon.pistol;
+    const bullet: ProjectileRuntimeState = {
+      id: createEntityId("bullet", ++this.bulletSequence),
+      ownerPlayerId: player.playerId,
+      type: "hero_bullet",
+      x: player.x + direction.x * (CombatNumbersV01.hero.collisionRadius + 8),
+      y: player.y + direction.y * (CombatNumbersV01.hero.collisionRadius + 8),
+      dirX: direction.x,
+      dirY: direction.y,
+      speed: config.bulletSpeed,
+      remainingLifetimeSeconds: config.bulletLifetimeSeconds
+    };
+
+    this.bulletsById.set(bullet.id, bullet);
+    return toBulletSnapshot(bullet);
+  }
+
+  update(
+    deltaSeconds: number,
+    enemies: EnemySystem,
+    economy: EconomySystem,
+    serverTimeMs: number,
+    playersById?: PlayerLookup
+  ): FeedbackEvent[] {
     if (deltaSeconds <= 0) {
       return [];
     }
@@ -71,7 +100,38 @@ export class ProjectileSystem {
         }
       }
 
-      if (bullet.remainingLifetimeSeconds <= 0 || !Number.isFinite(startY)) {
+      if (bullet.type === "hero_bullet") {
+        const hit = enemies.findFirstEnemyHitInSegment({
+          startX,
+          startY,
+          endX: bullet.x,
+          endY: bullet.y,
+          radius: CombatNumbersV01.weapon.pistol.bulletRadius
+        });
+
+        if (hit) {
+          const damageResult = enemies.damageEnemy(
+            hit.id,
+            CombatNumbersV01.weapon.pistol.damage,
+            economy,
+            serverTimeMs
+          );
+          const owner = bullet.ownerPlayerId ? playersById?.get(bullet.ownerPlayerId) : undefined;
+          if (owner && damageResult.damageApplied > 0) {
+            owner.stats.shotsHit = (owner.stats.shotsHit ?? 0) + 1;
+            owner.stats.damageDealt = (owner.stats.damageDealt ?? 0) + damageResult.damageApplied;
+            if (damageResult.killed) {
+              owner.stats.enemiesKilled = (owner.stats.enemiesKilled ?? 0) + 1;
+            }
+          }
+
+          events.push(...damageResult.events);
+          this.bulletsById.delete(bullet.id);
+          continue;
+        }
+      }
+
+      if (bullet.remainingLifetimeSeconds <= 0 || !Number.isFinite(bullet.x) || !Number.isFinite(bullet.y)) {
         this.bulletsById.delete(bullet.id);
       }
     }

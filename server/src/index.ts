@@ -11,11 +11,14 @@ import {
   type HealthCheckPayload,
   type JoinRoomRequest,
   type MoveInputPayload,
+  type BuyAmmoRequestPayload,
   type PlantRequestPayload,
   type PlayerReadyRequestPayload,
+  type ReloadRequestPayload,
   type RoomCreatedPayload,
   type RoomErrorPayload,
-  type RoomJoinedPayload
+  type RoomJoinedPayload,
+  type ShootRequestPayload
 } from "@sprout-and-steel/shared";
 import { GameLoop } from "./match/GameLoop";
 import { GameRoom, type RoomPlayer } from "./rooms/GameRoom";
@@ -57,7 +60,7 @@ io.on("connection", (socket) => {
   console.log(`[server] socket connected: ${socket.id}`);
   socket.emit("server.ready", {
     version: PROJECT_VERSION,
-    message: "Phase 5 planting economy server is ready."
+    message: "Phase 7 combat and weapon server is ready."
   });
 
   socket.on(C2S.ROOM_CREATE, (request: CreateRoomRequest, ack?: (payload: RoomAckPayload) => void) => {
@@ -176,6 +179,90 @@ io.on("connection", (socket) => {
     );
   });
 
+  socket.on(C2S.ACTION_SHOOT, (payload: ShootRequestPayload) => {
+    const playerContext = getPlayerLoopContext(socket.id);
+    if (!playerContext) {
+      socket.emit(S2C.ACTION_REJECTED, {
+        requestId: payload.requestId,
+        action: "shoot",
+        reason: "ROOM_NOT_READY",
+        message: "Join a ready match before shooting.",
+        serverTimeMs: Date.now()
+      });
+      return;
+    }
+
+    const result = playerContext.loop.applyShootAction(playerContext.player.playerId, payload);
+    if (!result.ok) {
+      socket.emit(S2C.ACTION_REJECTED, result.rejected);
+      if (result.feedback) {
+        io.to(playerContext.room.matchId).emit(S2C.FEEDBACK_EVENT, result.feedback);
+      }
+      console.log(
+        `[action] shoot rejected ${playerContext.room.matchId}; player=${playerContext.player.playerId}; reason=${result.rejected.reason}`
+      );
+      return;
+    }
+
+    socket.emit(S2C.ACTION_ACCEPTED, result.accepted);
+    if (result.feedback) {
+      io.to(playerContext.room.matchId).emit(S2C.FEEDBACK_EVENT, result.feedback);
+    }
+  });
+
+  socket.on(C2S.ACTION_RELOAD, (payload: ReloadRequestPayload) => {
+    const playerContext = getPlayerLoopContext(socket.id);
+    if (!playerContext) {
+      socket.emit(S2C.ACTION_REJECTED, {
+        requestId: payload.requestId,
+        action: "reload",
+        reason: "ROOM_NOT_READY",
+        message: "Join a ready match before reloading.",
+        serverTimeMs: Date.now()
+      });
+      return;
+    }
+
+    const result = playerContext.loop.applyReloadAction(playerContext.player.playerId, payload);
+    if (!result.ok) {
+      socket.emit(S2C.ACTION_REJECTED, result.rejected);
+      console.log(
+        `[action] reload rejected ${playerContext.room.matchId}; player=${playerContext.player.playerId}; reason=${result.rejected.reason}`
+      );
+      return;
+    }
+
+    socket.emit(S2C.ACTION_ACCEPTED, result.accepted);
+    if (result.feedback) {
+      io.to(playerContext.room.matchId).emit(S2C.FEEDBACK_EVENT, result.feedback);
+    }
+  });
+
+  socket.on(C2S.ACTION_BUY_AMMO, (payload: BuyAmmoRequestPayload) => {
+    const playerContext = getPlayerLoopContext(socket.id);
+    if (!playerContext) {
+      socket.emit(S2C.ACTION_REJECTED, {
+        requestId: payload.requestId,
+        action: "buyAmmo",
+        reason: "ROOM_NOT_READY",
+        message: "Join a ready match before buying ammo.",
+        serverTimeMs: Date.now()
+      });
+      return;
+    }
+
+    const result = playerContext.loop.applyBuyAmmoAction(playerContext.player.playerId, payload);
+    if (!result.ok) {
+      socket.emit(S2C.ACTION_REJECTED, result.rejected);
+      console.log(
+        `[action] buyAmmo rejected ${playerContext.room.matchId}; player=${playerContext.player.playerId}; reason=${result.rejected.reason}`
+      );
+      return;
+    }
+
+    socket.emit(S2C.ACTION_ACCEPTED, result.accepted);
+  });
+
   socket.on(C2S.DEBUG_COMMAND, (payload: DebugCommandPayload, ack?: (payload: { ok: boolean; reason?: string }) => void) => {
     if (process.env.NODE_ENV === "production") {
       const result = {
@@ -224,7 +311,7 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 5 listening on http://${HOST}:${PORT}`);
+  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 7 listening on http://${HOST}:${PORT}`);
 });
 
 function broadcastRoomState(room: GameRoom): void {
