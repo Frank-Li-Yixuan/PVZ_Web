@@ -19,6 +19,7 @@ const ATTACK_EPSILON_SECONDS = 0.000_001;
 
 type EnemyRuntimeState = EnemyState & {
   attackCooldownRemainingSeconds: number;
+  slowPercent?: number;
 };
 
 export type SpawnEnemyInput = {
@@ -50,6 +51,10 @@ export type EnemyDamageResult = {
   events: FeedbackEvent[];
   killed: boolean;
   damageApplied: number;
+};
+
+export type EnemyDamageOptions = {
+  sunDropChanceBonus?: number;
 };
 
 export class EnemySystem {
@@ -124,11 +129,13 @@ export class EnemySystem {
 
       if (enemy.state === "ATTACKING_PLANT") {
         events.push(...this.updatePlantAttack(enemy, deltaSeconds, plants, serverTimeMs));
+        this.updateSlowTimer(enemy, deltaSeconds);
         continue;
       }
 
       const blocked = this.updateMovement(enemy, deltaSeconds, plants);
       if (blocked) {
+        this.updateSlowTimer(enemy, deltaSeconds);
         continue;
       }
 
@@ -152,7 +159,10 @@ export class EnemySystem {
             damage: enemyConfig.baseDamage
           }
         });
+        continue;
       }
+
+      this.updateSlowTimer(enemy, deltaSeconds);
     }
 
     return {
@@ -161,7 +171,13 @@ export class EnemySystem {
     };
   }
 
-  damageEnemy(enemyId: string | undefined, amount: number, economy: EconomySystem, serverTimeMs: number): EnemyDamageResult {
+  damageEnemy(
+    enemyId: string | undefined,
+    amount: number,
+    economy: EconomySystem,
+    serverTimeMs: number,
+    options: EnemyDamageOptions = {}
+  ): EnemyDamageResult {
     if (!enemyId || !Number.isFinite(amount) || amount <= 0) {
       return { events: [], killed: false, damageApplied: 0 };
     }
@@ -208,7 +224,8 @@ export class EnemySystem {
     });
 
     const enemyConfig = CombatNumbersV01.enemies[enemy.type];
-    if (this.random() < enemyConfig.sunDropChance) {
+    const sunDropChance = clampChance(enemyConfig.sunDropChance + (options.sunDropChanceBonus ?? 0));
+    if (this.random() < sunDropChance) {
       economy.gain(CombatNumbersV01.economy.sunDropAmount);
       events.push({
         id: createEntityId("event", ++this.eventSequence),
@@ -220,12 +237,29 @@ export class EnemySystem {
         data: {
           amount: CombatNumbersV01.economy.sunDropAmount,
           reason: "enemy_drop",
-          enemyType: enemy.type
+          enemyType: enemy.type,
+          sunDropChance
         }
       });
     }
 
     return { events, killed: true, damageApplied };
+  }
+
+  applySlow(enemyId: string | undefined, slowPercent: number, durationSeconds: number): boolean {
+    if (!enemyId || !Number.isFinite(slowPercent) || !Number.isFinite(durationSeconds)) {
+      return false;
+    }
+
+    const enemy = this.enemiesById.get(enemyId);
+    if (!enemy || enemy.state === "DEAD" || slowPercent <= 0 || durationSeconds <= 0) {
+      return false;
+    }
+
+    enemy.slowed = true;
+    enemy.slowPercent = Math.max(enemy.slowPercent ?? 0, Math.min(0.95, slowPercent));
+    enemy.slowRemainingSeconds = roundSeconds(Math.max(enemy.slowRemainingSeconds ?? 0, durationSeconds));
+    return true;
   }
 
   findPeashotterTarget(plant: PlantState): EnemyState | undefined {
@@ -302,7 +336,8 @@ export class EnemySystem {
 
   private updateMovement(enemy: EnemyRuntimeState, deltaSeconds: number, plants: PlantSystem): boolean {
     const config = CombatNumbersV01.enemies[enemy.type];
-    const nextX = enemy.x - config.moveSpeed * deltaSeconds;
+    const speedMultiplier = enemy.slowed ? Math.max(0, 1 - (enemy.slowPercent ?? 0)) : 1;
+    const nextX = enemy.x - config.moveSpeed * speedMultiplier * deltaSeconds;
     const blocker = plants.findBlockingPlant(enemy.laneIndex, nextX, ENEMY_COLLISION_RADIUS_PX);
 
     if (blocker) {
@@ -315,6 +350,22 @@ export class EnemySystem {
 
     enemy.x = nextX;
     return false;
+  }
+
+  private updateSlowTimer(enemy: EnemyRuntimeState, deltaSeconds: number): void {
+    if (!enemy.slowed) {
+      return;
+    }
+
+    const remaining = (enemy.slowRemainingSeconds ?? 0) - deltaSeconds;
+    if (remaining > ATTACK_EPSILON_SECONDS) {
+      enemy.slowRemainingSeconds = roundSeconds(remaining);
+      return;
+    }
+
+    delete enemy.slowed;
+    delete enemy.slowRemainingSeconds;
+    delete enemy.slowPercent;
   }
 
   private updatePlantAttack(
@@ -383,4 +434,16 @@ function toEnemySnapshot(enemy: EnemyRuntimeState): EnemyState {
 
 function roundPosition(value: number): number {
   return Number(value.toFixed(2));
+}
+
+function roundSeconds(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function clampChance(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, value));
 }

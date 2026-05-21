@@ -8,6 +8,7 @@ import {
   type DebugCommandPayload,
   type FeedbackEvent,
   type AimInputPayload,
+  type EvolveRequestPayload,
   type GameStateSnapshot,
   type MatchId,
   type MatchPhaseChangedEvent,
@@ -23,6 +24,7 @@ import {
 import { MatchStateMachine } from "./MatchStateMachine";
 import { EconomySystem } from "../systems/EconomySystem";
 import { EnemySystem } from "../systems/EnemySystem";
+import { EvolutionSystem, type EvolutionActionResult } from "../systems/EvolutionSystem";
 import { PlantCombatSystem } from "../systems/PlantCombatSystem";
 import { PlantSystem, type PlantActionResult } from "../systems/PlantSystem";
 import { ProjectileSystem } from "../systems/ProjectileSystem";
@@ -77,6 +79,7 @@ export class GameLoop {
   private readonly plantCombatSystem = new PlantCombatSystem();
   private readonly waveSystem = new WaveSystem();
   private readonly weaponSystem = new WeaponSystem();
+  private readonly evolutionSystem = new EvolutionSystem();
   private readonly pendingSnapshotEvents: FeedbackEvent[] = [];
 
   constructor(private readonly options: GameLoopOptions) {
@@ -182,6 +185,20 @@ export class GameLoop {
       requestId: request.requestId,
       matchState: this.stateMachine.getMatchState(),
       player: this.playersById.get(playerId),
+      economy: this.economySystem,
+      serverTimeMs: this.now()
+    });
+  }
+
+  applyEvolveAction(playerId: PlayerId, request: EvolveRequestPayload): EvolutionActionResult {
+    this.syncPlayers(this.options.getRoomState());
+
+    return this.evolutionSystem.tryEvolve({
+      requestId: request.requestId,
+      matchState: this.stateMachine.getMatchState(),
+      evolutionUnlocked: this.waveSystem.getSnapshot(this.enemySystem.getSnapshot().length).evolutionUnlocked,
+      player: this.playersById.get(playerId),
+      path: request.path,
       economy: this.economySystem,
       serverTimeMs: this.now()
     });
@@ -461,6 +478,9 @@ function toSnapshotPlayer(player: PlayerRuntimeState): PlayerState {
 
   if (player.reloadRemainingSeconds !== undefined) {
     snapshot.reloadRemainingSeconds = player.reloadRemainingSeconds;
+  }
+  if (player.evolutionPath !== undefined) {
+    snapshot.evolutionPath = player.evolutionPath;
   }
 
   return snapshot;

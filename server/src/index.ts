@@ -8,6 +8,7 @@ import {
   type AimInputPayload,
   type CreateRoomRequest,
   type DebugCommandPayload,
+  type EvolveRequestPayload,
   type HealthCheckPayload,
   type JoinRoomRequest,
   type MoveInputPayload,
@@ -60,7 +61,7 @@ io.on("connection", (socket) => {
   console.log(`[server] socket connected: ${socket.id}`);
   socket.emit("server.ready", {
     version: PROJECT_VERSION,
-    message: "Phase 8 formal wave server is ready."
+    message: "Phase 9 hero evolution server is ready."
   });
 
   socket.on(C2S.ROOM_CREATE, (request: CreateRoomRequest, ack?: (payload: RoomAckPayload) => void) => {
@@ -263,6 +264,32 @@ io.on("connection", (socket) => {
     socket.emit(S2C.ACTION_ACCEPTED, result.accepted);
   });
 
+  socket.on(C2S.ACTION_EVOLVE, (payload: EvolveRequestPayload) => {
+    const playerContext = getPlayerLoopContext(socket.id);
+    if (!playerContext) {
+      socket.emit(S2C.ACTION_REJECTED, {
+        requestId: payload.requestId,
+        action: "evolve",
+        reason: "ROOM_NOT_READY",
+        message: "Join a ready match before evolving.",
+        serverTimeMs: Date.now()
+      });
+      return;
+    }
+
+    const result = playerContext.loop.applyEvolveAction(playerContext.player.playerId, payload);
+    if (!result.ok) {
+      socket.emit(S2C.ACTION_REJECTED, result.rejected);
+      console.log(
+        `[action] evolve rejected ${playerContext.room.matchId}; player=${playerContext.player.playerId}; reason=${result.rejected.reason}`
+      );
+      return;
+    }
+
+    socket.emit(S2C.ACTION_ACCEPTED, result.accepted);
+    io.to(playerContext.room.matchId).emit(S2C.FEEDBACK_EVENT, result.feedback);
+  });
+
   socket.on(C2S.DEBUG_COMMAND, (payload: DebugCommandPayload, ack?: (payload: { ok: boolean; reason?: string }) => void) => {
     if (process.env.NODE_ENV === "production") {
       const result = {
@@ -311,7 +338,7 @@ io.on("connection", (socket) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 8 listening on http://${HOST}:${PORT}`);
+  console.log(`[server] Sprout & Steel ${PROJECT_VERSION} Phase 9 listening on http://${HOST}:${PORT}`);
 });
 
 function broadcastRoomState(room: GameRoom): void {

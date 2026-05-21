@@ -156,6 +156,7 @@ button:disabled {
 .match-status,
 .plant-hud,
 .weapon-hud,
+.evolution-hud,
 .debug-overlay {
   margin-top: 14px;
   border-top: 1px solid #31483d;
@@ -165,11 +166,29 @@ button:disabled {
 .match-status h3,
 .plant-hud h3,
 .weapon-hud h3,
+.evolution-hud h3,
 .debug-overlay h3 {
   margin: 0 0 10px;
   color: #f3c84b;
   font-size: 14px;
   letter-spacing: 0;
+}
+
+.evolution-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.evolution-actions button {
+  padding-inline: 6px;
+  font-size: 12px;
+}
+
+.evolution-actions button[data-selected="true"] {
+  border-color: #f3c84b;
+  color: #101513;
+  background: #f3c84b;
 }
 
 .debug-grid {

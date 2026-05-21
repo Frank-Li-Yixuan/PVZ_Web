@@ -111,6 +111,7 @@ export type BuyAmmoRequestPayload = {
 };
 
 export type EvolveRequestPayload = {
+  requestId: RequestId;
   path: EvolutionPath;
 };
 

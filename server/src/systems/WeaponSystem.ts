@@ -11,6 +11,7 @@ import {
   type RequestId
 } from "@sprout-and-steel/shared";
 import type { EconomySystem } from "./EconomySystem";
+import { getAmmoPackConfig } from "./EvolutionSystem";
 import type { ProjectileSystem } from "./ProjectileSystem";
 
 const WEAPON_MATCH_STATES = new Set<MatchState>(["WAVE_PREP", "WAVE_ACTIVE", "WAVE_CLEAR", "BOSS_PREP", "BOSS_ACTIVE"]);
@@ -225,7 +226,7 @@ export class WeaponSystem {
       };
     }
 
-    const config = CombatNumbersV01.weapon.ammoPack;
+    const config = getAmmoPackConfig(player);
     if (!input.economy.canSpend(config.sunCost)) {
       return {
         ok: false,

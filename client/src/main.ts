@@ -17,8 +17,10 @@ import {
   type BulletState,
   type DebugCommandPayload,
   type EnemyState,
+  type EvolutionPath,
   type FeedbackEvent,
   type CreateRoomRequest,
+  type EvolveRequestPayload,
   type GameStateSnapshot,
   type JoinRoomRequest,
   type MatchPhaseChangedEvent,
@@ -45,9 +47,11 @@ let sendPlantRequest: (payload: PlantRequestPayload) => void = () => {};
 let sendShootRequest: (payload: ShootRequestPayload) => void = () => {};
 let sendReloadRequest: (payload: ReloadRequestPayload) => void = () => {};
 let sendBuyAmmoRequest: (payload: BuyAmmoRequestPayload) => void = () => {};
+let sendEvolveRequest: (payload: EvolveRequestPayload) => void = () => {};
 let sendDebugCommand: (payload: DebugCommandPayload) => void = () => {};
 let getLocalPlayerId: () => string | undefined = () => undefined;
 let selectedPlantType: PlantType = "sunbloom";
+let evolutionPanelOpen = false;
 let clientRequestSequence = 0;
 let currentHoverCellLabel = "-";
 
@@ -106,7 +110,7 @@ class TitleScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 306, `Phase 8 formal waves build ${PROJECT_VERSION}`, {
+      .text(width / 2, 306, `Phase 9 hero evolution build ${PROJECT_VERSION}`, {
         fontFamily: "Arial, sans-serif",
         fontSize: "18px",
         color: "#f3c84b"
@@ -194,6 +198,7 @@ class BattleScene extends Phaser.Scene {
       this.input.keyboard.on("keydown-E", () => this.trySendPlantRequest());
       this.input.keyboard.on("keydown-R", () => this.trySendReloadRequest());
       this.input.keyboard.on("keydown-Q", () => this.trySendBuyAmmoRequest());
+      this.input.keyboard.on("keydown-F", () => toggleEvolutionPanel());
     }
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -862,6 +867,12 @@ socket.on(S2C.ACTION_ACCEPTED, (payload: ActionAcceptedPayload) => {
   }
   if (payload.action === "buyAmmo") {
     showActionToast("Ammo purchased.");
+    return;
+  }
+  if (payload.action === "evolve") {
+    evolutionPanelOpen = false;
+    showActionToast("Evolution selected.");
+    renderMatchDebug();
   }
 });
 
@@ -889,6 +900,11 @@ socket.on(S2C.FEEDBACK_EVENT, (payload: FeedbackEvent) => {
   }
   if (payload.eventType === "hero.reloadComplete") {
     showActionToast("Reload complete.");
+    return;
+  }
+  if (payload.eventType === "hero.evolved") {
+    const path = typeof payload.data?.path === "string" ? payload.data.path : "Hero";
+    showActionToast(`${path} evolved.`);
   }
 });
 
@@ -957,6 +973,9 @@ lobby.leaveButton.addEventListener("click", () => {
 lobby.spawnShamblerButton.addEventListener("click", () => sendSpawnEnemyDebug("shambler"));
 lobby.spawnRunnerButton.addEventListener("click", () => sendSpawnEnemyDebug("runner"));
 lobby.spawnBruteButton.addEventListener("click", () => sendSpawnEnemyDebug("brute"));
+lobby.evolveFirepowerButton.addEventListener("click", () => sendEvolutionPath("firepower"));
+lobby.evolveControlButton.addEventListener("click", () => sendEvolutionPath("control"));
+lobby.evolveSupportButton.addEventListener("click", () => sendEvolutionPath("support"));
 
 renderLobby();
 
@@ -1017,6 +1036,15 @@ sendBuyAmmoRequest = (payload: BuyAmmoRequestPayload) => {
   socket.emit(C2S.ACTION_BUY_AMMO, payload);
 };
 
+sendEvolveRequest = (payload: EvolveRequestPayload) => {
+  if (!lobbyState.matchId) {
+    showActionToast("Create or join a room first.");
+    return;
+  }
+
+  socket.emit(C2S.ACTION_EVOLVE, payload);
+};
+
 sendDebugCommand = (payload: DebugCommandPayload) => {
   if (!lobbyState.matchId) {
     showActionToast("Create or join a room first.");
@@ -1053,6 +1081,22 @@ function selectPlantType(plantType: PlantType): void {
 
   selectedPlantType = plantType;
   renderMatchDebug();
+}
+
+function toggleEvolutionPanel(): void {
+  if (isTextInputFocused()) {
+    return;
+  }
+
+  evolutionPanelOpen = !evolutionPanelOpen;
+  renderMatchDebug();
+}
+
+function sendEvolutionPath(path: EvolutionPath): void {
+  sendEvolveRequest({
+    requestId: createClientRequestId(),
+    path
+  });
 }
 
 function sendSpawnEnemyDebug(enemyType: "shambler" | "runner" | "brute"): void {
@@ -1098,6 +1142,12 @@ function renderMatchDebug(): void {
     snapshot?.matchState ?? matchState.latestPhaseChanged?.nextState ?? lobbyState.room?.roomState ?? "-";
   const remainingSeconds = snapshot?.time.stateRemainingSeconds;
   const wave = snapshot?.wave;
+  const localPlayer = snapshot?.players.find((player) => player.playerId === lobbyState.playerId);
+  const evolutionCost = CombatNumbersV01.evolution.sunCost;
+  const evolutionUnlocked = wave?.evolutionUnlocked ?? false;
+  const hasEvolved = localPlayer?.hasEvolved ?? false;
+  const hasEnoughEvolutionSun = (snapshot?.economy.sharedSun ?? 0) >= evolutionCost;
+  const canAttemptEvolution = lobbyState.matchId !== undefined && !hasEvolved;
 
   lobby.matchState.textContent = displayedMatchState;
   lobby.phaseTimer.textContent = remainingSeconds === undefined ? "-" : `${remainingSeconds.toFixed(1)}s`;
@@ -1105,7 +1155,25 @@ function renderMatchDebug(): void {
   lobby.prepTimer.textContent =
     snapshot?.matchState === "WAVE_PREP" && remainingSeconds !== undefined ? `${remainingSeconds.toFixed(1)}s` : "-";
   lobby.baseHp.textContent = snapshot ? `${snapshot.base.hp}/${snapshot.base.maxHp}` : "-";
-  lobby.evolutionUnlocked.textContent = wave?.evolutionUnlocked ? "Unlocked" : "Locked";
+  lobby.evolutionUnlocked.textContent = evolutionUnlocked ? "Unlocked" : "Locked";
+  lobby.evolutionPath.textContent = localPlayer?.evolutionPath ?? (hasEvolved ? "Selected" : "None");
+  lobby.evolutionCost.textContent = String(evolutionCost);
+  lobby.evolutionAvailability.textContent = hasEvolved
+    ? "Selected"
+    : evolutionUnlocked
+      ? hasEnoughEvolutionSun
+        ? "Available"
+        : "Need sun"
+      : "Locked";
+  lobby.evolutionPanel.hidden = !evolutionPanelOpen;
+  for (const [button, path] of [
+    [lobby.evolveFirepowerButton, "firepower"],
+    [lobby.evolveControlButton, "control"],
+    [lobby.evolveSupportButton, "support"]
+  ] as const) {
+    button.disabled = !canAttemptEvolution;
+    button.dataset.selected = localPlayer?.evolutionPath === path ? "true" : "false";
+  }
   lobby.debugMatchId.textContent = snapshot?.matchId ?? lobbyState.matchId ?? "-";
   lobby.debugPlayerId.textContent = lobbyState.playerId ?? "-";
   lobby.debugSlot.textContent = lobbyState.playerSlot === undefined ? "-" : String(lobbyState.playerSlot);
@@ -1118,7 +1186,6 @@ function renderMatchDebug(): void {
   lobby.debugServerSeq.textContent = snapshot?.serverSeq === undefined ? "-" : String(snapshot.serverSeq);
   lobby.debugSnapshotRate.textContent = `${matchState.snapshotRateHz.toFixed(1)} Hz`;
 
-  const localPlayer = snapshot?.players.find((player) => player.playerId === lobbyState.playerId);
   lobby.debugPosition.textContent = localPlayer ? `${localPlayer.x.toFixed(1)}, ${localPlayer.y.toFixed(1)}` : "-";
   lobby.debugAim.textContent = localPlayer ? `${localPlayer.aimX.toFixed(2)}, ${localPlayer.aimY.toFixed(2)}` : "-";
   lobby.debugEntities.textContent = snapshot
@@ -1185,7 +1252,7 @@ function showActionToast(message: string): void {
 
 function enemyLabel(enemy: EnemyState): string {
   const prefix = enemy.type === "shambler" ? "S" : enemy.type === "runner" ? "R" : "B";
-  return `${prefix} ${enemy.hp}/${enemy.maxHp}`;
+  return `${prefix} ${enemy.hp}/${enemy.maxHp}${enemy.slowed ? " slow" : ""}`;
 }
 
 function drawEnemyPlaceholder(graphics: Phaser.GameObjects.Graphics, enemy: EnemyState): void {
@@ -1203,6 +1270,10 @@ function drawEnemyPlaceholder(graphics: Phaser.GameObjects.Graphics, enemy: Enem
   graphics.fillCircle(enemy.x + 7, enemy.y - 7, 3);
   graphics.lineStyle(2, enemy.state === "ATTACKING_PLANT" ? 0xffd56b : 0x1a261f, 0.95);
   graphics.strokeRoundedRect(enemy.x - width / 2, enemy.y - height / 2, width, height, 7);
+  if (enemy.slowed) {
+    graphics.lineStyle(3, 0x8fc4ff, 0.9);
+    graphics.strokeEllipse(enemy.x, enemy.y + 2, width + 12, height + 10);
+  }
   drawHpBar(graphics, enemy.x, enemy.y - height / 2 - 9, width + 6, enemy.hp, enemy.maxHp, 0xff8f7e);
 }
 
@@ -1308,6 +1379,9 @@ function feedbackLabel(event: FeedbackEvent): { text: string; color: string; siz
   if (event.eventType === "hero.reloadComplete") {
     return { text: "ready", color: "#8de36c", size: "12px", durationMs: 420 };
   }
+  if (event.eventType === "hero.evolved") {
+    return { text: "evolved", color: "#f3c84b", size: "14px", durationMs: 700 };
+  }
   if (event.eventType === "wave.started") {
     const waveIndex = typeof event.data?.waveIndex === "number" ? event.data.waveIndex : "-";
     return { text: `Wave ${waveIndex}`, color: "#f3c84b", size: "18px", durationMs: 700 };
@@ -1361,6 +1435,13 @@ function createLobbyUi(): {
   prepTimer: HTMLSpanElement;
   baseHp: HTMLSpanElement;
   evolutionUnlocked: HTMLSpanElement;
+  evolutionPath: HTMLSpanElement;
+  evolutionPanel: HTMLElement;
+  evolutionCost: HTMLSpanElement;
+  evolutionAvailability: HTMLSpanElement;
+  evolveFirepowerButton: HTMLButtonElement;
+  evolveControlButton: HTMLButtonElement;
+  evolveSupportButton: HTMLButtonElement;
   debugMatchId: HTMLSpanElement;
   debugPlayerId: HTMLSpanElement;
   debugSlot: HTMLSpanElement;
@@ -1428,6 +1509,7 @@ function createLobbyUi(): {
         <div><dt>Prep</dt><dd data-testid="prep-timer">-</dd></div>
         <div><dt>Base HP</dt><dd data-testid="base-hp">-</dd></div>
         <div><dt>Evolution</dt><dd data-testid="evolution-unlocked">Locked</dd></div>
+        <div><dt>Path</dt><dd data-testid="evolution-path">None</dd></div>
       </dl>
     </section>
     <section class="plant-hud" aria-label="Planting">
@@ -1446,6 +1528,18 @@ function createLobbyUi(): {
         <div><dt>Reload</dt><dd data-testid="reload-state">-</dd></div>
         <div><dt>Buy CD</dt><dd data-testid="ammo-cooldown">-</dd></div>
       </dl>
+    </section>
+    <section class="evolution-hud" data-testid="evolution-panel" aria-label="Evolution paths" hidden>
+      <h3>Evolution</h3>
+      <dl class="room-meta">
+        <div><dt>Cost</dt><dd data-testid="evolution-cost">200</dd></div>
+        <div><dt>Status</dt><dd data-testid="evolution-availability">Locked</dd></div>
+      </dl>
+      <div class="evolution-actions">
+        <button type="button" data-testid="evolve-firepower">Firepower</button>
+        <button type="button" data-testid="evolve-control">Control</button>
+        <button type="button" data-testid="evolve-support">Support</button>
+      </div>
     </section>
     <section class="debug-overlay" aria-label="Debug overlay">
       <h3>Debug</h3>
@@ -1497,6 +1591,13 @@ function createLobbyUi(): {
     prepTimer: requiredElement(panel, "[data-testid='prep-timer']"),
     baseHp: requiredElement(panel, "[data-testid='base-hp']"),
     evolutionUnlocked: requiredElement(panel, "[data-testid='evolution-unlocked']"),
+    evolutionPath: requiredElement(panel, "[data-testid='evolution-path']"),
+    evolutionPanel: requiredElement(panel, "[data-testid='evolution-panel']"),
+    evolutionCost: requiredElement(panel, "[data-testid='evolution-cost']"),
+    evolutionAvailability: requiredElement(panel, "[data-testid='evolution-availability']"),
+    evolveFirepowerButton: requiredElement(panel, "[data-testid='evolve-firepower']"),
+    evolveControlButton: requiredElement(panel, "[data-testid='evolve-control']"),
+    evolveSupportButton: requiredElement(panel, "[data-testid='evolve-support']"),
     debugMatchId: requiredElement(panel, "[data-testid='debug-match-id']"),
     debugPlayerId: requiredElement(panel, "[data-testid='debug-player-id']"),
     debugSlot: requiredElement(panel, "[data-testid='debug-slot']"),

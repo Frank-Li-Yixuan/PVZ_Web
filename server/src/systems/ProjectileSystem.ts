@@ -11,6 +11,7 @@ import {
 } from "@sprout-and-steel/shared";
 import type { EconomySystem } from "./EconomySystem";
 import type { EnemySystem } from "./EnemySystem";
+import { getControlSlowModifier, getHeroPistolDamage, getSunDropChanceBonus } from "./EvolutionSystem";
 
 type ProjectileRuntimeState = BulletState & {
   laneIndex?: number;
@@ -110,13 +111,20 @@ export class ProjectileSystem {
         });
 
         if (hit) {
+          const owner = bullet.ownerPlayerId ? playersById?.get(bullet.ownerPlayerId) : undefined;
           const damageResult = enemies.damageEnemy(
             hit.id,
-            CombatNumbersV01.weapon.pistol.damage,
+            getHeroPistolDamage(owner),
             economy,
-            serverTimeMs
+            serverTimeMs,
+            {
+              sunDropChanceBonus: getSunDropChanceBonus(owner)
+            }
           );
-          const owner = bullet.ownerPlayerId ? playersById?.get(bullet.ownerPlayerId) : undefined;
+          const slow = getControlSlowModifier(owner, hit.type);
+          if (slow && damageResult.damageApplied > 0 && !damageResult.killed) {
+            enemies.applySlow(hit.id, slow.slowPercent, slow.durationSeconds);
+          }
           if (owner && damageResult.damageApplied > 0) {
             owner.stats.shotsHit = (owner.stats.shotsHit ?? 0) + 1;
             owner.stats.damageDealt = (owner.stats.damageDealt ?? 0) + damageResult.damageApplied;

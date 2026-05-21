@@ -78,6 +78,7 @@ export const FEEDBACK_EVENT_TYPES = [
   "hero.reloadStart",
   "hero.reloadComplete",
   "hero.dryFire",
+  "hero.evolved",
   "plant.placed",
   "plant.destroyed",
   "sun.gained",
