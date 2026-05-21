@@ -52,7 +52,7 @@ export const CombatNumbersV01 = {
       sunCost: 50,
       maxHp: 80,
       firstProduceDelaySeconds: 6,
-      produceIntervalSeconds: 8,
+      produceIntervalSeconds: 30,
       produceAmount: 25
     },
     peashotter: {
@@ -131,8 +131,8 @@ export const CombatNumbersV01 = {
 
   boss: {
     ironmaw: {
-      maxHp: 2200,
-      phase2HpThreshold: 1100,
+      maxHp: 6000,
+      phase2HpThreshold: 3000,
       phase1MoveSpeed: 8,
       phase2MoveSpeed: 11,
       mainLane: 2,
@@ -163,7 +163,7 @@ export const CombatNumbersV01 = {
         teamSunReward: 75
       },
       charge: {
-        firstCastAfterPhase2Seconds: 6,
+        firstCastAfterPhase2Seconds: 2,
         cooldownSeconds: 16,
         windupSeconds: 3,
         requiredInterruptPoints: 6,

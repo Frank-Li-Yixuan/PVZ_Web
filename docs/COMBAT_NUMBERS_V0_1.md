@@ -167,7 +167,7 @@ columnIndex 越大，越靠近敌人出生侧
 |---|---:|
 | 经济植物每次产出 | 25 阳光 |
 | 经济植物首次产出延迟 | 6 秒 |
-| 经济植物后续产出间隔 | 8 秒 |
+| 经济植物后续产出间隔 | 30 秒 |
 | 普通敌人死亡掉落概率 | 20% |
 | 快速敌人死亡掉落概率 | 20% |
 | 装甲敌人死亡掉落概率 | 40% |
@@ -283,7 +283,7 @@ V0.1 敌人不主动追击英雄，但接触敌人或 Boss 技能会伤害英雄
 64 × 25 = 1600 damage
 ```
 
-这说明 Boss HP 不能太低，否则英雄可以无脑射死 Boss。因此 Boss 初版 HP 设置为 2200，并通过弱点、打断、召唤小怪让弹药管理产生压力。
+这说明 Boss HP 不能太低，否则英雄可以无脑射死 Boss。Phase 14 首轮试玩后 Boss HP 调整为 6000，并通过弱点、打断、召唤小怪让弹药管理产生压力。
 
 ### 6.3 弹药购买
 
@@ -330,13 +330,13 @@ V0.1 敌人不主动追击英雄，但接触敌人或 Boss 技能会伤害英雄
 | 成本 | 50 |
 | HP | 80 |
 | 首次产出延迟 | 6 秒 |
-| 后续产出间隔 | 8 秒 |
+| 后续产出间隔 | 30 秒 |
 | 每次产出 | 25 阳光 |
 | 是否自动收集 | 是 |
 
 设计说明：
 
-- 一个日光芽理论上 16 秒回本；
+- 一个日光芽理论上 36 秒回本；
 - 过早被敌人打掉会造成明显经济损失；
 - 自动收集降低实现成本和操作负担。
 
@@ -700,8 +700,8 @@ evolutionUnlocked = true
 |---|---:|
 | Boss ID | `ironmaw_siege_beast` |
 | 中文暂名 | 铁颚攻城兽 |
-| 最大 HP | 2200 |
-| 阶段 2 阈值 | 1100 HP，50% |
+| 最大 HP | 6000 |
+| 阶段 2 阈值 | 3000 HP，50% |
 | 阶段 1 移速 | 8 px/s |
 | 阶段 2 移速 | 11 px/s |
 | Boss 主路线 | lane 2 |
@@ -713,7 +713,7 @@ evolutionUnlocked = true
 
 - Boss 可被中间三路植物攻击，避免只有中路植物有价值；
 - 边路仍然重要，因为 Boss 会召唤小怪；
-- 2200 HP 让英雄不能只靠开局弹药秒杀 Boss。
+- 6000 HP 让英雄不能只靠开局弹药秒杀 Boss。
 
 ### 11.2 Boss 伤害接收规则
 
@@ -728,7 +728,7 @@ evolutionUnlocked = true
 
 ### 11.3 Boss 阶段 1 技能
 
-Boss 阶段 1 从 2200 HP 到 1101 HP。
+Boss 阶段 1 从 6000 HP 到 3001 HP。
 
 #### 技能 A：重锤攻击 / `hammer_slam`
 
@@ -771,7 +771,7 @@ Boss 阶段 1 从 2200 HP 到 1101 HP。
 
 ### 11.4 Boss 阶段转换
 
-当 Boss HP <= 1100：
+当 Boss HP <= 3000：
 
 | 效果 | 数值 |
 |---|---:|
@@ -786,13 +786,13 @@ Boss 阶段 1 从 2200 HP 到 1101 HP。
 
 ### 11.5 Boss 阶段 2 技能
 
-Boss 阶段 2 从 1100 HP 到 0 HP。
+Boss 阶段 2 从 3000 HP 到 0 HP。
 
 #### 技能 D：冲锋读条 / `charge_windup`
 
 | 参数 | 值 |
 |---|---:|
-| 首次释放时间 | 阶段 2 开始后 6 秒 |
+| 首次释放时间 | 阶段 2 开始后 2 秒 |
 | 冷却 | 16 秒 |
 | 读条时间 | 3 秒 |
 | 打断需求 | 6 interrupt points |
@@ -841,8 +841,8 @@ Boss 阶段 2 从 1100 HP 到 0 HP。
 
 | 问题 | 调整方向 |
 |---|---|
-| Boss 太容易被射死 | 提高 HP 到 2500，或减少弱点持续时间 |
-| Boss 太肉太拖 | 降低 HP 到 1800–2000 |
+| Boss 太容易被射死 | 提高 HP，或减少弱点持续时间 |
+| Boss 太肉太拖 | 降低 HP |
 | 打断太容易 | 打断需求从 6 提到 7 或降低读条时间 |
 | 打断太难 | 打断需求从 6 降到 5 或延长读条到 3.5 秒 |
 | 防线瞬间崩 | 降低 Boss 重锤伤害或召唤频率 |
@@ -1031,7 +1031,7 @@ export const CombatNumbersV01 = {
       sunCost: 50,
       maxHp: 80,
       firstProduceDelaySeconds: 6,
-      produceIntervalSeconds: 8,
+      produceIntervalSeconds: 30,
       produceAmount: 25,
     },
     peashotter: {
@@ -1110,8 +1110,8 @@ export const CombatNumbersV01 = {
 
   boss: {
     ironmaw: {
-      maxHp: 2200,
-      phase2HpThreshold: 1100,
+      maxHp: 6000,
+      phase2HpThreshold: 3000,
       phase1MoveSpeed: 8,
       phase2MoveSpeed: 11,
       mainLane: 2,
@@ -1142,7 +1142,7 @@ export const CombatNumbersV01 = {
         teamSunReward: 75,
       },
       charge: {
-        firstCastAfterPhase2Seconds: 6,
+        firstCastAfterPhase2Seconds: 2,
         cooldownSeconds: 16,
         windupSeconds: 3,
         requiredInterruptPoints: 6,
@@ -1332,4 +1332,3 @@ Codex 完成实现后，至少进行以下测试：
 - Boss HP 和打断机制迫使玩家保留弹药并合作射击弱点。
 
 这不是最终平衡，而是第一套可以直接进入 Codex 实现、试玩和日志调参的数值基线。
-

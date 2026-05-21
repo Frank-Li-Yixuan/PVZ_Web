@@ -84,7 +84,7 @@ describe("Phase 1 shared contracts", () => {
     expect(CombatNumbersV01.plants.peashotter.sunCost).toBe(100);
     expect(CombatNumbersV01.enemies.brute.maxHp).toBe(260);
     expect(CombatNumbersV01.evolution.sunCost).toBe(200);
-    expect(CombatNumbersV01.boss.ironmaw.maxHp).toBe(2200);
+    expect(CombatNumbersV01.boss.ironmaw.maxHp).toBe(6000);
     expect(CombatNumbersV01.boss.ironmaw.charge.requiredInterruptPoints).toBe(6);
 
     expect(WavesV01).toHaveLength(5);
