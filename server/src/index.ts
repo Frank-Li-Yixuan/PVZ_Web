@@ -29,6 +29,12 @@ type RoomAckPayload = RoomCreatedPayload | RoomJoinedPayload | RoomErrorPayload;
 
 const PORT = Number(process.env.PORT ?? Phase0RuntimeConfig.serverPort);
 const HOST = process.env.HOST ?? Phase0RuntimeConfig.serverHost;
+const CLIENT_ORIGINS = process.env.CLIENT_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [
+  "http://127.0.0.1:5173",
+  "http://localhost:5173",
+  "http://127.0.0.1:5174",
+  "http://localhost:5174"
+];
 const roomManager = new RoomManager();
 const activeMatchLoops = new Map<string, GameLoop>();
 
@@ -52,7 +58,7 @@ const httpServer = http.createServer((request, response) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://127.0.0.1:5173", "http://localhost:5173"],
+    origin: CLIENT_ORIGINS,
     methods: ["GET", "POST"]
   }
 });

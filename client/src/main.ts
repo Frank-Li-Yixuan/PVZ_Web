@@ -75,6 +75,9 @@ import {
   type TransientAnimationState
 } from "./rendering/entityAnimController";
 import { feedbackEventToFxAnimation, type FeedbackFxAnimationSpec } from "./rendering/fxAnimController";
+import { getActiveSave, SAVE_SELECTED_EVENT } from "./save/ActiveSaveStore";
+import { MainMenuScene } from "./scenes/MainMenuScene";
+import { SaveSelectScene } from "./scenes/SaveSelectScene";
 import "./styles.css";
 
 let battleScene: BattleScene | undefined;
@@ -93,6 +96,19 @@ let clientRequestSequence = 0;
 let currentHoverCellLabel = "-";
 const audioManager = new AudioManager();
 audioManager.installUnlockListeners();
+
+const DEBUG_UI_INITIAL =
+  import.meta.env.VITE_DEBUG_UI === "true" ||
+  (import.meta.env as Record<string, string | undefined>).DEBUG_UI === "true" ||
+  new URLSearchParams(window.location.search).get("debug") === "1";
+
+document.body.dataset.uiFlow = "menu";
+document.body.dataset.debugUi = DEBUG_UI_INITIAL ? "true" : "false";
+window.addEventListener("keydown", (event) => {
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
+    document.body.dataset.debugUi = document.body.dataset.debugUi === "true" ? "false" : "true";
+  }
+});
 
 const PLANT_HOTKEYS = {
   ONE: "sunbloom",
@@ -246,6 +262,9 @@ class BattleScene extends Phaser.Scene {
   create(): void {
     battleScene = this;
     this.cameras.main.setBackgroundColor("#14201c");
+    const battleScale = Math.min(this.scale.width / MapConfigV01.worldWidthPx, this.scale.height / MapConfigV01.worldHeightPx);
+    this.cameras.main.setZoom(battleScale);
+    this.cameras.main.centerOn(MapConfigV01.worldWidthPx / 2, MapConfigV01.worldHeightPx / 2);
     registerAnimations(this);
     this.drawBattlefield();
     this.hoverGraphics = this.add.graphics().setDepth(12);
@@ -1139,10 +1158,10 @@ class BattleScene extends Phaser.Scene {
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game",
-  width: 960,
-  height: 540,
+  width: 1280,
+  height: 720,
   backgroundColor: "#16201d",
-  scene: [BattleScene],
+  scene: [MainMenuScene, SaveSelectScene, BattleScene],
   pixelArt: false,
   scale: {
     mode: Phaser.Scale.FIT,
@@ -1188,6 +1207,16 @@ const matchState: MatchClientState = {
 };
 
 const lobby = createLobbyUi();
+
+window.addEventListener(SAVE_SELECTED_EVENT, () => {
+  document.body.dataset.uiFlow = "lobby";
+  const activeSave = getActiveSave();
+  if (activeSave) {
+    lobby.playerNameInput.value = activeSave.players.playerA.displayName;
+    lobby.error.textContent = `已选择 ${activeSave.saveName}`;
+  }
+  renderLobby();
+});
 
 document.addEventListener("click", (event) => {
   if (event.target instanceof HTMLElement && event.target.closest("button")) {
